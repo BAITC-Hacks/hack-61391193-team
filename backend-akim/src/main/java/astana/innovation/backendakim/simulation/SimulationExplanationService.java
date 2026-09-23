@@ -12,6 +12,24 @@ import static astana.innovation.backendakim.simulation.SimulationResult.*;
 /** A transparent template fallback. It describes calculator output and never invents a score. */
 @Service
 public class SimulationExplanationService {
+    Explanation explain(ScoreCalculator.Calculation calculation, OptimalSolution best, Comparison comparison) {
+        var base = explain(calculation);
+        String comparisonText = comparison.isOptimal()
+                ? " Ваш набор достигает максимального Score в текущей модели."
+                : " Максимальный Score в текущей модели: %s; разница с вашим результатом: %s."
+                    .formatted(best.finalScore().stripTrailingZeros().toPlainString(),
+                            comparison.scoreGap().stripTrailingZeros().toPlainString());
+        var recommendations = new ArrayList<String>();
+        recommendations.add("Лучший допустимый набор: " + best.measureEffects().stream()
+                .map(m -> m.measureId() + " — " + m.name() + " ("
+                        + (m.targetDistrictId() == null ? "весь город" : districtName(calculation, m.targetDistrictId())) + ")")
+                .collect(java.util.stream.Collectors.joining("; "))
+                + ". Бюджет: " + best.budget().spent() + " из " + best.budget().limit() + ".");
+        recommendations.addAll(base.recommendations());
+        return new Explanation(base.source(), base.summary() + comparisonText, base.strengths(), base.risks(),
+                List.copyOf(recommendations));
+    }
+
     Explanation explain(ScoreCalculator.Calculation calculation) {
         var baseline = calculation.baseline();
         var result = calculation.summary();

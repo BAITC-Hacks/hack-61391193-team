@@ -24,7 +24,8 @@ public class SimulationController {
     @PostMapping("/calculate")
     @Operation(summary = "Рассчитать Score для 5 мероприятий",
             description = "Проверяет бюджет, повторы, лимит направления, районы и конфликты. "
-                    + "Применяет lag, synergy и clip, возвращает точные числа и объяснение без LLM.",
+                    + "Применяет lag, synergy и clip, находит глобально лучший набор и сравнивает его с выбором пользователя. "
+                    + "При настроенном LLM передаёт оба рассчитанных результата для объяснения; иначе использует шаблон.",
             requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(required = true,
                     content = @Content(schema = @Schema(implementation = SimulationRequest.class),
                             examples = @ExampleObject(name = "Пример из датасета: 95 единиц → 56.54307",

@@ -1,10 +1,8 @@
 spring:
   application:
     name: backend-akim
-  autoconfigure:
-    exclude:
-      - org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration
-      - org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration
+  flyway:
+    enabled: false
   mvc:
     problemdetails:
       enabled: true
@@ -15,6 +13,11 @@ server:
 app:
   cors:
     allowed-origin-patterns: ${CORS_ALLOWED_ORIGINS:http://localhost:*,http://127.0.0.1:*}
+  llm:
+    url: ${SIMULATION_LLM_URL:}
+    model: ${SIMULATION_LLM_MODEL:}
+    api-key: ${SIMULATION_LLM_API_KEY:}
+    timeout-ms: ${SIMULATION_LLM_TIMEOUT_MS:10000}
 
 springdoc:
   swagger-ui:
@@ -23,3 +26,25 @@ springdoc:
     operations-sorter: alpha
     tags-sorter: alpha
   paths-to-match: /api/**
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-components: always
+      show-details: never
+
+---
+# The standalone simulator still works without a database.
+# Docker Compose enables the postgres profile and its datasource configuration.
+spring:
+  config:
+    activate:
+      on-profile: "!postgres"
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration
+      - org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration

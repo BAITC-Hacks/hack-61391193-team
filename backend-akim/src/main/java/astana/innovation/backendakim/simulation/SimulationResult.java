@@ -19,7 +19,11 @@ public record SimulationResult(
         List<DistrictResult> districts,
         List<MeasureEffect> measureEffects,
         List<AppliedSynergy> synergies,
-        Explanation explanation) {
+        Explanation explanation,
+        @Schema(description = "Глобально лучший допустимый набор для текущего каталога; null для baseline и старых сохранений")
+        OptimalSolution bestSolution,
+        @Schema(description = "Сравнение завершённого выбора пользователя с максимумом Score")
+        Comparison comparison) {
 
     public record Budget(int limit, int spent, int remaining) { }
 
@@ -47,7 +51,20 @@ public record SimulationResult(
     public record AppliedSynergy(
             List<String> measureIds, String districtId, String metric, BigDecimal bonus) { }
 
+    public record OptimalSolution(
+            String algorithm, boolean provenOptimal, long evaluatedCandidates,
+            List<SimulationRequest.Decision> decisions,
+            BigDecimal finalScore, BigDecimal displayScore, BigDecimal scoreDelta,
+            Budget budget, ScoreSummary summary, List<DistrictResult> districts,
+            List<MeasureEffect> measureEffects, List<AppliedSynergy> synergies) { }
+
+    public record Comparison(
+            @Schema(description = "Точная разница bestSolution.finalScore − finalScore, без округления")
+            BigDecimal scoreGap,
+            @Schema(description = "Score пользователя равен глобальному максимуму, даже если выбран другой набор")
+            boolean isOptimal) { }
+
     public record Explanation(
-            @Schema(description = "template: детерминированное объяснение без вызова LLM") String source,
+            @Schema(description = "template: объяснение по рассчитанным данным; llm: резюме от LLM, списки из расчёта") String source,
             String summary, List<String> strengths, List<String> risks, List<String> recommendations) { }
 }
