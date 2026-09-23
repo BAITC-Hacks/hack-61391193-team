@@ -11,7 +11,7 @@ public record SimulationRequest(
 
     public record Decision(
             @Schema(description = "Уникальный ID из GET /api/v1/measures", example = "M7",
-                    requiredMode = Schema.RequiredMode.REQUIRED, pattern = "^M([1-9]|1[0-4])$")
+                    requiredMode = Schema.RequiredMode.REQUIRED, pattern = "^M([1-9]|1[0-6])$")
             String measureId,
             @Schema(description = "Обязателен для районных мер. Для городских отсутствует или null.",
                     allowableValues = {"esil", "almaty", "saryarka", "baikonur", "nura", "saraishyk"}, example = "nura")
@@ -35,6 +35,16 @@ public record SimulationRequest(
               {"measureId":"M10","districtId":"nura"},
               {"measureId":"M12"},
               {"measureId":"M5","districtId":"saryarka"}
+            ]}
+            """;
+
+    public static final String MUNICIPAL_EXAMPLE_JSON = """
+            {"decisions":[
+              {"measureId":"M4","districtId":"esil"},
+              {"measureId":"M7","districtId":"saraishyk"},
+              {"measureId":"M10","districtId":"nura"},
+              {"measureId":"M15","districtId":"nura"},
+              {"measureId":"M16","districtId":"nura"}
             ]}
             """;
 }

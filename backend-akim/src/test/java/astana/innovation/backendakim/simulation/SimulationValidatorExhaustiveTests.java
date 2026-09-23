@@ -33,7 +33,9 @@ class SimulationValidatorExhaustiveTests {
             spec("M11", "safety", "district", 10, 1, "B2", 12, "T1", -2),
             spec("M12", "services", "city", 14, 1, "C2", 5),
             spec("M13", "services", "district", 28, 4, "C1", 18, "E2", 2),
-            spec("M14", "services", "city", 16, 1, "C1", 5, "C2", 2));
+            spec("M14", "services", "city", 16, 1, "C1", 5, "C2", 2),
+            spec("M15", "services", "district", 12, 1, "T1", 3, "T2", 3, "B2", 8),
+            spec("M16", "services", "district", 22, 3, "C1", 12, "T1", 3, "B2", 4));
     private static final List<LocalConflict> LOCAL_CONFLICTS = List.of(
             new LocalConflict("M4", "M7", "esil", "almaty"),
             new LocalConflict("M5", "M13", "saryarka", "baikonur"));
@@ -65,10 +67,10 @@ class SimulationValidatorExhaustiveTests {
     }
 
     @Test
-    void contextualCatalogReturnsAllFourteenMeasuresForEveryDistrict() {
+    void contextualCatalogReturnsAllSixteenMeasuresForEveryDistrict() {
         for (String districtId : DISTRICTS) {
             var options = catalog.getMeasuresForDistrict(districtId);
-            assertThat(options).hasSize(14).extracting(option -> option.id())
+            assertThat(options).hasSize(16).extracting(option -> option.id())
                     .containsExactlyElementsOf(SPECS.stream().map(MeasureSpec::id).toList());
             options.forEach(option -> {
                 if ("city".equals(option.scope())) {
@@ -124,18 +126,18 @@ class SimulationValidatorExhaustiveTests {
             }
         }
 
-        assertThat(combinations(SPECS, 5)).hasSize(2_002);
-        assertThat(equivalenceClasses).isEqualTo(2_452);
-        assertThat(representedStates).isEqualTo(3_210_252);
-        assertThat(validStates).isEqualTo(1_580_316);
-        assertThat(representedStates - validStates).isEqualTo(1_629_936);
-        assertThat(measureCombinationsWithValidAssignment).isEqualTo(1_181);
+        assertThat(combinations(SPECS, 5)).hasSize(4_368);
+        assertThat(equivalenceClasses).isEqualTo(5_108);
+        assertThat(representedStates).isEqualTo(9_019_368);
+        assertThat(validStates).isEqualTo(4_859_952);
+        assertThat(representedStates - validStates).isEqualTo(4_159_416);
+        assertThat(measureCombinationsWithValidAssignment).isEqualTo(2_451);
         assertThat(violationIncidence).containsExactly(
-                Map.entry("BUDGET_EXCEEDED", 1_086_594L),
-                Map.entry("CATEGORY_LIMIT", 292_470L),
-                Map.entry("CONFLICT", 788_160L));
-        assertThat(validBudgetDistribution.keySet()).containsExactlyElementsOf(IntStream.rangeClosed(61, 100).boxed().toList());
-        assertThat(validBudgetDistribution.get(100)).isEqualTo(66_420L);
+                Map.entry("BUDGET_EXCEEDED", 2_664_222L),
+                Map.entry("CATEGORY_LIMIT", 1_120_410L),
+                Map.entry("CONFLICT", 1_572_672L));
+        assertThat(validBudgetDistribution.keySet()).containsExactlyElementsOf(IntStream.rangeClosed(58, 100).boxed().toList());
+        assertThat(validBudgetDistribution.get(100)).isEqualTo(157_212L);
     }
 
     @Test
@@ -199,6 +201,24 @@ class SimulationValidatorExhaustiveTests {
         for (List<Decision> permutation : permutations(invalid)) {
             assertThat(violationCounts(violations(new SimulationRequest(permutation))))
                     .isEqualTo(counts("BUDGET_EXCEEDED", 1, "CATEGORY_LIMIT", 1, "CONFLICT", 2));
+        }
+    }
+
+    @Test
+    void newServiceMeasuresRequireValidDistrictsAndShareTheServiceCategoryLimit() {
+        for (String districtId : DISTRICTS) {
+            assertThat(violations(scenario("M15:" + districtId, "M16:" + districtId,
+                    "M1:almaty", "M7:nura", "M10:esil"))).as(districtId).isEmpty();
+        }
+        for (String measureId : List.of("M15", "M16")) {
+            assertThat(violationCounts(violations(scenario(measureId, "M1:almaty", "M7:nura", "M10:esil", "M12"))))
+                    .as("missing district for %s", measureId).isEqualTo(counts("DISTRICT_REQUIRED", 1));
+            assertThat(violationCounts(violations(scenario(measureId + ":unknown", "M1:almaty", "M7:nura", "M10:esil", "M12"))))
+                    .as("unknown district for %s", measureId).isEqualTo(counts("UNKNOWN_DISTRICT", 1));
+        }
+        for (String thirdService : List.of("M12", "M13:saraishyk", "M14")) {
+            assertThat(violationCounts(violations(scenario("M15:nura", "M16:esil", thirdService, "M9:almaty", "M10:baikonur"))))
+                    .as("third service %s", thirdService).isEqualTo(counts("CATEGORY_LIMIT", 1));
         }
     }
 

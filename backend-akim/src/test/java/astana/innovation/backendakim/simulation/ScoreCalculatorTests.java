@@ -141,6 +141,45 @@ class ScoreCalculatorTests {
     }
 
     @Test
+    void snowAndDrainageEffectsUseTheirOwnLagsAndAddOnlyInTheSelectedDistrict() {
+        var snow = new SimulationValidator.SelectedMeasure(catalog.getMeasures().stream()
+                .filter(measure -> measure.id().equals("M15")).findFirst().orElseThrow(), "nura");
+        var drainage = new SimulationValidator.SelectedMeasure(catalog.getMeasures().stream()
+                .filter(measure -> measure.id().equals("M16")).findFirst().orElseThrow(), "nura");
+        var result = calculator.calculate(List.of(snow, drainage));
+
+        assertThat(result.spent()).isEqualTo(34);
+        assertThat(result.synergies()).isEmpty();
+        var snowEffect = result.effects().getFirst();
+        assertThat(snowEffect.realizationFactor()).isEqualByComparingTo("0.875");
+        assertThat(snowEffect.realizedEffects().get("T1")).isEqualByComparingTo("2.625");
+        assertThat(snowEffect.realizedEffects().get("T2")).isEqualByComparingTo("2.625");
+        assertThat(snowEffect.realizedEffects().get("B2")).isEqualByComparingTo("7");
+        assertThat(snowEffect.districtScoreContributionBeforeClip()).isEqualByComparingTo("1.155");
+        assertThat(snowEffect.affectedDistrictIds()).containsExactly("nura");
+        var drainageEffect = result.effects().get(1);
+        assertThat(drainageEffect.realizationFactor()).isEqualByComparingTo("0.625");
+        assertThat(drainageEffect.realizedEffects().get("C1")).isEqualByComparingTo("7.5");
+        assertThat(drainageEffect.realizedEffects().get("T1")).isEqualByComparingTo("1.875");
+        assertThat(drainageEffect.realizedEffects().get("B2")).isEqualByComparingTo("2.5");
+        assertThat(drainageEffect.districtScoreContributionBeforeClip()).isEqualByComparingTo("1.1625");
+        assertThat(drainageEffect.affectedDistrictIds()).containsExactly("nura");
+
+        var nura = result.districts().stream().filter(district -> district.id().equals("nura")).findFirst().orElseThrow();
+        assertThat(nura.metricDeltas().get("T1")).isEqualByComparingTo("4.5");
+        assertThat(nura.metricDeltas().get("T2")).isEqualByComparingTo("2.625");
+        assertThat(nura.metricDeltas().get("B2")).isEqualByComparingTo("9.5");
+        assertThat(nura.metricDeltas().get("C1")).isEqualByComparingTo("7.5");
+        assertThat(nura.scoreDelta()).isEqualByComparingTo("2.3175");
+        assertThat(nura.scoreAfter()).isEqualByComparingTo("51.4975");
+        result.districts().stream().filter(district -> !district.id().equals("nura")).forEach(district -> {
+            assertThat(district.after()).isEqualTo(district.before());
+            assertThat(district.scoreDelta()).isZero();
+        });
+        assertThat(calculator.calculate(List.of(drainage, snow)).districts()).isEqualTo(result.districts());
+    }
+
+    @Test
     void clipsOnceAfterSummingPositiveAndNegativeEffects() {
         CatalogService customCatalog = catalogWithMetrics(98, 99);
         ScoreCalculator custom = new ScoreCalculator(customCatalog);

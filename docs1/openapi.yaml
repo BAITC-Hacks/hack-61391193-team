@@ -5,10 +5,11 @@ info:
     жет до 100. Расчёт и поиск лучшего набора детерминированные; объяснение формир\
     уется LLM при настройке API или по шаблону. Откройте POST /api/simulation/calculate,\
     \ нажмите Try it out и Execute: пример уже заполнен. Модель v2-saraishyk: 6 ра\
-    йонов, включая Сарайшык. Score примера = 56.31781049, базовый = 52.33242049. Д\
-    ля сохранения в PostgreSQL зарегистрируйтесь через POST /api/v1/auth/register\
-    \ или войдите через /api/v1/auth/login, введите JWT accessToken через Authorize\
-    \ (BearerAuth) и используйте раздел History."
+    йонов, включая Сарайшык, и 16 мероприятий. M15 (уборка снега) и M16 (ливневая\
+    \ канализация) используют синтетические стоимость, сроки и эффекты. Score прим\
+    ера = 56.31781049, базовый = 52.33242049. Для сохранения в PostgreSQL зарегист\
+    рируйтесь через POST /api/v1/auth/register или войдите через /api/v1/auth/login,\
+    \ введите JWT accessToken через Authorize (BearerAuth) и используйте раздел History."
   version: v1
 servers:
 - url: http://localhost:8081
@@ -207,6 +208,20 @@ paths:
                   - measureId: M12
                   - measureId: M5
                     districtId: saryarka
+              'Уборка снега и ливневая канализация: 85 единиц':
+                description: "Уборка снега и ливневая канализация: 85 единиц"
+                value:
+                  decisions:
+                  - measureId: M4
+                    districtId: esil
+                  - measureId: M7
+                    districtId: saraishyk
+                  - measureId: M10
+                    districtId: nura
+                  - measureId: M15
+                    districtId: nura
+                  - measureId: M16
+                    districtId: nura
         required: true
       responses:
         "200":
@@ -270,6 +285,20 @@ paths:
                   - measureId: M12
                   - measureId: M5
                     districtId: saryarka
+              'Уборка снега и ливневая канализация: 85 единиц':
+                description: "Уборка снега и ливневая канализация: 85 единиц"
+                value:
+                  decisions:
+                  - measureId: M4
+                    districtId: esil
+                  - measureId: M7
+                    districtId: saraishyk
+                  - measureId: M10
+                    districtId: nura
+                  - measureId: M15
+                    districtId: nura
+                  - measureId: M16
+                    districtId: nura
         required: true
       responses:
         "200":
@@ -761,7 +790,7 @@ components:
           type: string
           description: Уникальный ID из GET /api/v1/measures
           example: M7
-          pattern: "^M([1-9]|1[0-4])$"
+          pattern: "^M([1-9]|1[0-6])$"
         districtId:
           type: string
           description: Обязателен для районных мер. Для городских отсутствует или
