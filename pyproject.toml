@@ -1,0 +1,67 @@
+[project]
+name = "hack-61391193-team"
+version = "0.1.0"
+description = "Hackathon team scaffold — Laya System-1 decisions + fine-tuning"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "laya==0.3.7",
+    "torch==2.14.0",
+    "transformers==5.17.0",
+    "safetensors==0.8.0",
+    "huggingface-hub==1.32.0",
+    "numpy==2.4.6",
+    "datasets==5.0.1",
+    "accelerate==1.15.0",
+    "scipy==1.17.1",
+    "pandas==3.0.6",
+    "tabulate==0.10.0",
+    "fastapi==0.141.1",
+    "uvicorn[standard]==0.53.0",
+    "pydantic==2.13.5",
+    "python-dotenv==1.2.3",
+    "qdrant-client==1.19.1",
+    "redis==8.1.0",
+    "minio==7.2.20",
+    "psycopg[binary]==3.3.6",
+    "sentence-transformers==6.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff==0.16.8",
+    "ipython==9.17.1",
+]
+
+[project.scripts]
+laya-smoke = "app.smoke:main"
+laya-prepare = "finetune.prepare_dataset:main"
+laya-train = "finetune.train:main"
+download-bge-m3 = "app.download_bge_m3:main"
+
+[build-system]
+requires = ["hatchling==1.32.4"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/app", "src/finetune"]
+
+[tool.hatch.build.targets.wheel.sources]
+"src/app" = "app"
+"src/finetune" = "finetune"
+
+[tool.uv]
+package = true
+
+# Default host install uses CPU wheels (fast). GPU training uses Dockerfile.train.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

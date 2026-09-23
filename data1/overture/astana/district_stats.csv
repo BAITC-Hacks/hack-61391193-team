@@ -1,0 +1,6 @@
+﻿area_km2,district_id,name_ru,building_count,building_footprint_km2,bus_stop_count,clinic_count,crossing_count,green_area_km2,green_share_pct,hospital_count,kindergarten_count,park_area_km2,road_km_cycleway,road_km_footway,road_km_light_rail,road_km_living_street,road_km_main,road_km_motorway,road_km_path,road_km_pedestrian,road_km_primary,road_km_residential,road_km_secondary,road_km_service,road_km_steps,road_km_tertiary,road_km_total,road_km_track,road_km_trunk,road_km_unclassified,road_km_unknown,school_count,street_lamp_count,traffic_signals_count
+194.5,esil,Есиль,12047,4.58,197,36,1058,19.56,10.1,33,32,2.31,42.9,358.6,4.8,38.9,217.5,,14.2,0.8,15.7,162.4,86.6,409.2,1.6,65.5,1365.6,91.2,49.7,20.3,8.0,63,73,259
+93.4,almaty,Алматы,12921,4.77,197,20,460,4.95,5.3,30,26,1.16,15.9,140.0,,0.3,128.8,,3.1,,11.5,156.8,64.3,291.4,0.4,31.9,784.2,28.8,21.1,14.4,4.3,49,,104
+67.8,saryarka,Сарыарка,23954,5.31,174,25,396,4.21,6.2,27,30,0.25,5.5,143.2,,0.1,126.8,,0.9,0.4,26.3,191.4,32.6,321.1,0.7,44.2,834.4,31.4,23.7,6.1,6.8,46,19,114
+183.5,baikonur,Байконур,20987,6.34,100,17,230,2.48,1.4,9,14,0.29,1.4,70.9,,,167.3,11.7,0.8,,28.9,136.5,57.4,338.7,0.3,24.8,849.5,89.5,44.5,40.7,3.4,22,,102
+188.5,nura,Нура,13269,4.51,170,17,881,14.06,7.5,30,22,1.05,55.3,240.6,,,189.4,,2.6,,55.3,259.4,36.3,379.0,0.4,37.0,1231.2,79.9,60.8,20.8,3.8,50,66,119
