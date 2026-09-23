@@ -35,12 +35,27 @@ export type SimulationResult = {
   horizonQuarters: number;
   baseline: ScoreSummary; summary: ScoreSummary;
   districts: DistrictResult[];
-  measureEffects: { measureId: string; name: string; categoryId: string; scope: string;
-    targetDistrictId: string | null; cost: number; lagQuarters: number;
-    realizationFactor: number; affectedDistrictIds: string[]; realizedEffects: MetricValues;
-    districtScoreContributionBeforeClip: number }[];
-  synergies: { measureIds: string[]; districtId: string; metric: string; bonus: number }[];
-  explanation: { source: string; summary: string; strengths: string[]; risks: string[]; recommendations: string[] };
+  measureEffects: MeasureEffect[];
+  synergies: Synergy[];
+  explanation: { source: "llm" | "template"; summary: string; strengths: string[]; risks: string[]; recommendations: string[] };
+  /** Global maximum of the fixed model; null for the baseline. Shown only after a full 5-decision calculation. */
+  bestSolution: OptimalSolution | null;
+  comparison: { scoreGap: number; isOptimal: boolean } | null;
+};
+export type MeasureEffect = {
+  measureId: string; name: string; categoryId: string; scope: string;
+  targetDistrictId: string | null; cost: number; lagQuarters: number;
+  realizationFactor: number; affectedDistrictIds: string[]; realizedEffects: MetricValues;
+  districtScoreContributionBeforeClip: number;
+};
+export type Synergy = { measureIds: string[]; districtId: string; metric: string; bonus: number };
+export type OptimalSolution = {
+  algorithm: string; provenOptimal: boolean; evaluatedCandidates: number;
+  decisions: { measureId: string; districtId: string | null }[];
+  finalScore: number; displayScore: number; scoreDelta: number;
+  budget: { limit: number; spent: number; remaining: number };
+  summary: ScoreSummary; districts: DistrictResult[];
+  measureEffects: MeasureEffect[]; synergies: Synergy[];
 };
 export type ScoreSummary = {
   dAvg: number; dMin: number; weakestDistrictId: string; weakestDistrictName: string;

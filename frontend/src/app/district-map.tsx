@@ -22,7 +22,7 @@ type LayerKey = "city" | "parks" | "roads" | "pois";
 
 const districtIds: Record<string, string> = {
   "Есиль": "esil", "Алматы": "almaty", "Сарыарка": "saryarka",
-  "Байконур": "baikonur", "Нура": "nura",
+  "Байконур": "baikonur", "Нура": "nura", "Сарайшык": "saraishyk",
 };
 const poiKinds: Record<string, string> = {
   school: "Школы", kindergarten: "Детсады", hospital: "Больницы",
@@ -421,12 +421,12 @@ export default function DistrictMap() {
     setResult(null); setCalculationError([]); setCalculating(false);
   }
 
-  async function calculate() {
-    if (!bootstrap || decisions.length !== bootstrap.requiredDecisionCount) return;
+  async function calculate(list: Decision[] = decisions) {
+    if (!bootstrap || list.length !== bootstrap.requiredDecisionCount) return;
     const requestId = ++calculationId.current;
     setCalculating(true); setCalculationError([]);
     try {
-      const response = await apiPost<SimulationResult>(bootstrap.api.calculate, { decisions });
+      const response = await apiPost<SimulationResult>(bootstrap.api.calculate, { decisions: list });
       if (requestId !== calculationId.current) return;
       setResult(response);
       setShowResults(true);
@@ -441,6 +441,15 @@ export default function DistrictMap() {
   const selectedStats = stats.find((item) => item.district_id === selected?.id);
   const selectedResult = (result ?? baseline)?.districts.find((item) => item.id === selected?.id);
   const selections = selectedDecisions(decisions, measures, districts);
+
+  function tryBestPlan() {
+    if (!result?.bestSolution) return;
+    // Recalculating the returned decisions shows that the maximum is a real, valid plan.
+    const best = result.bestSolution.decisions.map((item) => item.districtId
+      ? { measureId: item.measureId, districtId: item.districtId } : { measureId: item.measureId });
+    setDecisions(best);
+    void calculate(best);
+  }
 
   function removeDecision(measureId: string) {
     calculationId.current += 1;
@@ -468,7 +477,7 @@ export default function DistrictMap() {
           <div className="tool-content">
             <p className="tool-label">Границы</p>
             <label><input type="radio" checked={boundaryMode === "administrative"} onChange={() => changeBoundaryMode("administrative")} /> 6 административных</label>
-            <label><input type="radio" checked={boundaryMode === "model"} disabled={!modelGeojson} onChange={() => changeBoundaryMode("model")} /> 5 районов модели</label>
+            <label><input type="radio" checked={boundaryMode === "model"} disabled={!modelGeojson} onChange={() => changeBoundaryMode("model")} /> 6 районов модели</label>
             <p className="tool-label">Данные Overture</p>
             {(["city", "parks", "roads", "pois"] as LayerKey[]).map((layer) => (
               <label key={layer}><input type="checkbox" checked={visibleLayers[layer]} disabled={!bootstrap || layerLoading === layer || (layer === "city" && !cityGeojson)} onChange={() => void toggleLayer(layer)} /> {{ city: "Граница города", parks: "Парки", roads: "Дороги и ЛРТ", pois: "Инфраструктура" }[layer]}{layerLoading === layer ? " · загрузка" : ""}{manifest ? ` · ${manifest.layers.find((item) => item.id === (layer === "city" ? "city-boundary" : layer))?.count ?? ""}` : ""}</label>
@@ -510,7 +519,7 @@ export default function DistrictMap() {
         </> : <p className={styles.unavailable}>Этот район показан на административной карте, но не входит в симулятор.</p>}
       </aside>}
       <ScenarioHud selections={selections} requiredCount={bootstrap?.requiredDecisionCount ?? 5} budgetLimit={bootstrap?.budgetLimit ?? 100} calculating={calculating} ready={!!bootstrap} errors={calculationError} onRemove={removeDecision} onCalculate={() => void calculate()} />
-      {result && showResults && <ResultsOverlay result={result} selections={selections} bootstrap={bootstrap} onViewDistricts={() => setShowResults(false)} onNewScenario={newScenario} />}
+      {result && showResults && <ResultsOverlay result={result} selections={selections} bootstrap={bootstrap} onViewDistricts={() => setShowResults(false)} onNewScenario={newScenario} onTryBest={tryBestPlan} busy={calculating} />}
     </main>
   );
 }

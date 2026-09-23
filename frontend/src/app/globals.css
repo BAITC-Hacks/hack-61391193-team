@@ -270,3 +270,49 @@ button:focus-visible, summary:focus-visible, select:focus-visible { outline: 2px
   .budget-hud { width: 132px; }
   .turns-action > span { font-size: 10px; }
 }
+
+/* Comparison with the model's best plan (results overlay). */
+.comparison-card { margin-top: 18px; }
+.plan-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+.plan-card { min-width: 0; padding: 16px; border: 1px solid #dce7e8; border-radius: 14px; background: #f7fafa; }
+.plan-card.best { border-color: #9ccabc; background: #eef7f3; }
+.plan-card > span { display: block; color: #607884; font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.plan-card > strong { display: block; margin-top: 4px; font-size: 34px; line-height: 1.1; letter-spacing: -.04em; }
+.plan-card > small { color: #5b737f; font-size: 12px; }
+.plan-card dl { display: grid; gap: 4px; margin: 12px 0 0; font-size: 12px; }
+.plan-card dl div { display: flex; justify-content: space-between; gap: 8px; }
+.plan-card dt { color: #6a808b; }
+.plan-card dd { margin: 0; font-weight: 700; text-align: right; }
+.gap-line { margin: 12px 0 0; padding: 10px 14px; border-radius: 10px; background: #fff6ea; color: #7a4e14; font-size: 14px; }
+.optimal-note { margin: 12px 0 0; padding: 12px 14px; border-radius: 10px; background: #eef7f3; color: #1f6a52; font-size: 14px; }
+.comparison-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 6px; }
+.comparison-grid h3 { margin: 18px 0 8px; font-size: 14px; }
+.measure-diff { margin: 8px 0; padding: 10px 12px; border-left: 3px solid #a9bdc2; border-radius: 0 10px 10px 0; background: #f7fafa; }
+.measure-diff.best { border-left-color: #458e81; background: #eef7f3; }
+.measure-diff > p { margin: 0 0 6px; color: #607884; font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.measure-diff ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.measure-diff li { display: grid; gap: 2px; }
+.measure-diff strong { font-size: 13px; line-height: 1.3; }
+.measure-diff span { color: #5b737f; font-size: 11px; line-height: 1.45; }
+.compare-table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+.compare-table th, .compare-table td { padding: 5px 4px; border-bottom: 1px solid #ecf1f1; }
+.compare-table thead th { color: #607884; font-size: 10px; font-weight: 800; text-align: right; }
+.compare-table thead th:first-child, .compare-table tbody th { font-weight: 400; text-align: left; }
+.compare-table td { text-align: right; white-space: nowrap; }
+.compare-table td:last-child { font-weight: 700; }
+.compare-table td.critical { color: #b1392c; font-weight: 700; }
+.compare-table tr.weakest th { font-weight: 700; }
+.comparison-footer { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-top: 16px; }
+.comparison-footer .results-note { flex: 1 1 280px; margin: 0; }
+.comparison-footer button { min-height: 40px; padding: 9px 16px; }
+.comparison-footer button:disabled { opacity: .6; cursor: wait; }
+.analysis-heading { display: flex; align-items: center; gap: 10px; }
+.analysis-heading h2 { margin: 0; }
+.analysis-card > p { margin: 12px 0 0; }
+.source-badge { padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 800; letter-spacing: .06em; }
+.source-badge.llm { background: #e4eef9; color: #28598a; }
+.source-badge.template { background: #edf0f1; color: #5b6f78; }
+@media (max-width: 760px) {
+  .plan-cards, .comparison-grid { grid-template-columns: 1fr; gap: 10px; }
+  .plan-card > strong { font-size: 28px; }
+}
