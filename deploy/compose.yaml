@@ -1,0 +1,70 @@
+name: akim-demo
+
+services:
+  postgres:
+    image: postgres:16.15-alpine3.23
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend-akim:
+    build:
+      context: ..
+      dockerfile: backend-akim/Dockerfile
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: postgres
+      PORT: "8080"
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      JWT_SECRET: ${JWT_SECRET}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      SIMULATION_LLM_URL: https://api.openai.com/v1/chat/completions
+      SIMULATION_LLM_MODEL: gpt-4.1-mini-2025-04-14
+      SIMULATION_LLM_API_KEY: ${OPENAI_API_KEY:-}
+      SIMULATION_LLM_TIMEOUT_MS: "10000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/actuator/health/db"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  frontend:
+    build:
+      context: ${FRONTEND_CONTEXT:?Set FRONTEND_CONTEXT to the frontend directory}
+      dockerfile: Dockerfile.deploy
+      args:
+        BACKEND_ORIGIN: http://backend-akim:8080
+    restart: unless-stopped
+    environment:
+      BACKEND_ORIGIN: http://backend-akim:8080
+    depends_on:
+      backend-akim:
+        condition: service_healthy
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --url http://frontend:3000
+    depends_on:
+      frontend:
+        condition: service_started
+
+volumes:
+  postgres-data:

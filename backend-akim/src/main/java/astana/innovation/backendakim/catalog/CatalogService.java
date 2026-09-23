@@ -68,7 +68,12 @@ public class CatalogService {
             measure("M13", "services", "Сервисы", "Модернизация тепло- и водосетей", DISTRICT_SCOPE, 28, 4,
                     "C1", 18, "E2", 2),
             measure("M14", "services", "Сервисы", "Аварийные бригады ЖКХ + раннее оповещение", CITY_SCOPE, 16, 1,
-                    "C1", 5, "C2", 2)
+                    "C1", 5, "C2", 2),
+            // Synthetic municipal-service extensions; rationale and calibration: docs1/municipal-measures.md.
+            measure("M15", "services", "Сервисы", "Приоритетная уборка снега и наледи", DISTRICT_SCOPE, 12, 1,
+                    "T1", 3, "T2", 3, "B2", 8),
+            measure("M16", "services", "Сервисы", "Строительство и очистка ливневой канализации", DISTRICT_SCOPE, 22, 3,
+                    "C1", 12, "T1", 3, "B2", 4)
     );
 
     public DistrictResponse getDistrict(String id) {

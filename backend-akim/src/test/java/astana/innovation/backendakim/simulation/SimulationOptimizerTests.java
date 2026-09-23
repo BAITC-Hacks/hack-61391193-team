@@ -28,8 +28,8 @@ class SimulationOptimizerTests {
 
         var result = optimizer.optimal();
 
-        // Independently enumerated with integer arithmetic at a score scale of 8,000,000,000.
-        assertThat(result.evaluatedCandidates()).isEqualTo(1_580_316);
+        // Independently enumerated with integer arithmetic at a score scale of 800,000,000.
+        assertThat(result.evaluatedCandidates()).isEqualTo(4_859_952);
         assertThat(result.calculation().summary().finalScore()).isEqualByComparingTo("57.01147549");
         assertThat(result.calculation().spent()).isEqualTo(98);
         assertThat(result.request().decisions()).containsExactly(new Decision("M2", null), new Decision("M3", "nura"),
@@ -47,7 +47,8 @@ class SimulationOptimizerTests {
                 district("alpha", .57, Map.of("T1", 1, "B2", 99, "S1", 40, "S2", 39, "E2", 100)));
         for (List<String> ids : List.of(
                 List.of("M1", "M2", "M3", "M4", "M7", "M10", "M11", "M12", "M14"),
-                List.of("M4", "M5", "M6", "M7", "M9", "M10", "M12", "M13", "M14"))) {
+                List.of("M4", "M5", "M6", "M7", "M9", "M10", "M12", "M13", "M14"),
+                List.of("M2", "M4", "M7", "M8", "M10", "M14", "M15", "M16"))) {
             CatalogService catalog = catalogue(source.getMeasures().stream().filter(m -> ids.contains(m.id())).toList(), districts);
             assertMatchesOracle(catalog);
         }

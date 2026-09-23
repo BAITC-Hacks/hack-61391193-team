@@ -55,6 +55,50 @@ class SimulationApiIntegrationTests {
         }
     }
 
+    @Test
+    void calculatesSnowAndDrainageTogetherWithLocalEffectsAndLag() throws Exception {
+        for (String path : new String[]{"/api/simulation/calculate", "/api/v1/simulation/calculate"}) {
+            mvc.perform(post(path).contentType(MediaType.APPLICATION_JSON)
+                            .content(scenario("M15:nura", "M16:nura", "M7:saraishyk", "M10:esil", "M1:almaty")))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.budget.spent").value(88))
+                    .andExpect(jsonPath("$.budget.remaining").value(12))
+                    .andExpect(jsonPath("$.measureEffects[3].measureId").value("M15"))
+                    .andExpect(jsonPath("$.measureEffects[3].affectedDistrictIds", org.hamcrest.Matchers.contains("nura")))
+                    .andExpect(jsonPath("$.measureEffects[3].realizationFactor").value(0.875))
+                    .andExpect(jsonPath("$.measureEffects[3].districtScoreContributionBeforeClip").value(1.155))
+                    .andExpect(jsonPath("$.measureEffects[4].measureId").value("M16"))
+                    .andExpect(jsonPath("$.measureEffects[4].affectedDistrictIds", org.hamcrest.Matchers.contains("nura")))
+                    .andExpect(jsonPath("$.measureEffects[4].realizationFactor").value(0.625))
+                    .andExpect(jsonPath("$.measureEffects[4].districtScoreContributionBeforeClip").value(1.1625))
+                    .andExpect(jsonPath("$.districts[4].metricDeltas.T1").value(4.5))
+                    .andExpect(jsonPath("$.districts[4].metricDeltas.T2").value(2.625))
+                    .andExpect(jsonPath("$.districts[4].metricDeltas.B2").value(9.5))
+                    .andExpect(jsonPath("$.districts[4].metricDeltas.C1").value(7.5))
+                    .andExpect(jsonPath("$.districts[4].scoreDelta").value(2.3175))
+                    .andExpect(jsonPath("$.districts[2].scoreDelta").value(0))
+                    .andExpect(jsonPath("$.synergies", hasSize(0)));
+        }
+    }
+
+    @Test
+    void resubmittingBestSolutionDecisionsReproducesTheBestScore() throws Exception {
+        var first = mvc.perform(post("/api/v1/simulation/calculate").contentType(MediaType.APPLICATION_JSON)
+                        .content(SimulationRequest.EXAMPLE_JSON))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        // Sent back exactly as the frontend receives it, including "districtId": null for city measures.
+        var bestDecisions = json.readTree(first).path("bestSolution").path("decisions");
+        var best = json.readTree(first).path("bestSolution");
+
+        mvc.perform(post("/api/v1/simulation/calculate").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"decisions\":" + bestDecisions + "}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.finalScore").value(best.path("finalScore").doubleValue()))
+                .andExpect(jsonPath("$.budget.spent").value(best.path("budget").path("spent").intValue()))
+                .andExpect(jsonPath("$.comparison.isOptimal").value(true))
+                .andExpect(jsonPath("$.comparison.scoreGap").value(0.0));
+    }
+
     @ParameterizedTest(name = "{0}")
     @MethodSource("invalidScenarios")
     void rejectsInvalidScenariosWithoutScore(String code, String json) throws Exception {
@@ -85,6 +129,11 @@ class SimulationApiIntegrationTests {
                 Arguments.of("DUPLICATE_MEASURE", example.replace("\"M8\"", "\"M7\"")),
                 Arguments.of("BUDGET_EXCEEDED", example.replace("\"M10\"", "\"M3\"")),
                 Arguments.of("CATEGORY_LIMIT", example.replace("\"M10\"", "\"M9\"")),
+                Arguments.of("DISTRICT_REQUIRED", scenario("M15", "M16:nura", "M1:almaty", "M7:nura", "M10:esil")),
+                Arguments.of("DISTRICT_REQUIRED", scenario("M15:nura", "M16", "M1:almaty", "M7:nura", "M10:esil")),
+                Arguments.of("UNKNOWN_DISTRICT", scenario("M15:unknown", "M16:nura", "M1:almaty", "M7:nura", "M10:esil")),
+                Arguments.of("UNKNOWN_DISTRICT", scenario("M15:nura", "M16:unknown", "M1:almaty", "M7:nura", "M10:esil")),
+                Arguments.of("CATEGORY_LIMIT", scenario("M15:nura", "M16:esil", "M12", "M9:nura", "M10:nura")),
                 Arguments.of("CONFLICT", scenario("M1:nura", "M3:esil", "M9:nura", "M10:nura", "M12")),
                 Arguments.of("CONFLICT", scenario("M4:nura", "M7:nura", "M9:nura", "M10:nura", "M12")),
                 Arguments.of("CONFLICT", scenario("M5:nura", "M13:nura", "M9:nura", "M10:nura", "M12")));

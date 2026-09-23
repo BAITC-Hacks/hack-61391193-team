@@ -41,17 +41,17 @@ class SimulationLlmClientTests {
             captured.set(json.readTree(exchange.getRequestBody().readAllBytes()));
             authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
             method.set(exchange.getRequestMethod());
-            respond(exchange, 200, "{\"choices\":[{\"message\":{\"content\":\"  Ваш результат — 56,54. Лучшее решение улучшает школы района Нура.  \"}}]}");
+            respond(exchange, 200, "{\"choices\":[{\"message\":{\"content\":\"  Ваш результат — 56,32. Лучшее решение улучшает школы района Нура.  \"}}]}");
         });
         SimulationResult deterministic = result();
         try (var client = new SimulationLlmClient(json, endpoint, "local-test-model", "test-secret", 2000)) {
             var explanation = client.explain(request(), deterministic).orElseThrow();
             assertThat(explanation.source()).isEqualTo("llm");
-            assertThat(explanation.summary()).isEqualTo("Ваш результат — 56,54. Лучшее решение улучшает школы района Нура.");
+            assertThat(explanation.summary()).isEqualTo("Ваш результат — 56,32. Лучшее решение улучшает школы района Нура.");
             assertThat(explanation.strengths()).isEqualTo(deterministic.explanation().strengths());
             assertThat(explanation.risks()).isEqualTo(deterministic.explanation().risks());
             assertThat(explanation.recommendations()).isEqualTo(deterministic.explanation().recommendations());
-            assertThat(deterministic.finalScore()).isEqualByComparingTo("56.54307");
+            assertThat(deterministic.finalScore()).isEqualByComparingTo("56.31781049");
         }
 
         assertThat(authorization.get()).isEqualTo("Bearer test-secret");
@@ -62,18 +62,28 @@ class SimulationLlmClientTests {
         assertThat(payload.path("messages")).hasSize(2);
         assertThat(payload.path("messages").path(0).path("role").asText()).isEqualTo("system");
         assertThat(payload.path("messages").path(0).path("content").asText())
-                .contains("русском", "единственным источником истины", "глобальный оптимум");
-        JsonNode data = json.readTree(payload.path("messages").path(1).path("content").asText());
-        assertThat(data.path("request").path("decisions")).hasSize(5);
-        assertThat(data.path("request").path("decisions").path(0).path("measureId").asText()).isEqualTo("M7");
-        assertThat(data.path("result").path("finalScore").decimalValue()).isEqualByComparingTo("56.54307");
-        assertThat(data.path("result").path("bestSolution").path("finalScore").decimalValue()).isEqualByComparingTo("57.12345");
-        assertThat(data.path("result").path("bestSolution").path("decisions").path(0).path("districtId").asText()).isEqualTo("nura");
-        assertThat(data.path("result").path("comparison").path("scoreGap").decimalValue()).isEqualByComparingTo("0.58038");
-        assertThat(data.path("rules").path("formula").asText()).isEqualTo(SimulationRules.FORMULA);
-        assertThat(data.path("rules").path("budget").asInt()).isEqualTo(100);
-        assertThat(data.path("rules").path("maxPerCategory").asInt()).isEqualTo(2);
-        assertThat(data.toString()).contains("Школа", "Нура").doesNotContain("accessToken", "profileId", "test-secret");
+                .contains("русском", "единственным источником истины", "userPlanIsOptimal", "учебной модели", "causedBy");
+        JsonNode facts = json.readTree(payload.path("messages").path(1).path("content").asText());
+        assertThat(facts.propertyNames()).containsExactly("model", "userPlan", "comparison", "bestPlan");
+        assertThat(facts.path("model").path("budget").asInt()).isEqualTo(100);
+        JsonNode user = facts.path("userPlan");
+        assertThat(user.path("measures")).hasSize(5);
+        assertThat(user.path("measures").path(0).path("id").asText()).isEqualTo("M7");
+        assertThat(user.path("measures").path(0).path("district").asText()).isEqualTo("Нура");
+        assertThat(user.path("measures").path(0).path("realizedShare").asText()).isEqualTo("5/8");
+        assertThat(user.path("measures").path(0).path("districtScoreGain").decimalValue()).isEqualByComparingTo("1.1");
+        assertThat(user.path("score").decimalValue()).isEqualByComparingTo("56.32");
+        assertThat(user.path("budgetSpent").asInt()).isEqualTo(95);
+        assertThat(facts.path("comparison").path("scoreGap").decimalValue()).isEqualByComparingTo("0.69");
+        assertThat(facts.path("comparison").path("userPlanIsOptimal").asBoolean()).isFalse();
+        assertThat(facts.path("bestPlan").path("score").decimalValue()).isEqualByComparingTo("57.01");
+        assertThat(facts.path("bestPlan").path("measures").findValuesAsString("id"))
+                .containsExactly("M2", "M3", "M8", "M9", "M14");
+        // Only the digest is sent: no raw result, geometry, history or credentials.
+        assertThat(facts.toString()).contains("Школа", "Нура")
+                .doesNotContain("accessToken", "profileId", "test-secret", "geometry", "evaluatedCandidates",
+                        "realizationFactor", "56.31781049");
+        assertThat(payload.path("messages").path(1).path("content").asText().length()).isLessThan(8000);
     }
 
     @Test
@@ -226,28 +236,10 @@ class SimulationLlmClientTests {
     }
 
     private SimulationRequest request() {
-        return json.readValue(SimulationRequest.EXAMPLE_JSON, SimulationRequest.class);
+        return SimulationFixtures.example();
     }
 
     private SimulationResult result() {
-        return json.readValue("""
-                {
-                  "metricName":"Astana Quality of Life Score","modelVersion":"v1",
-                  "finalScore":56.54307,"displayScore":56.54,"baselineScore":52.55768,"scoreDelta":3.98539,
-                  "budget":{"limit":100,"spent":95,"remaining":5},"horizonQuarters":8,
-                  "districts":[{"id":"nura","name":"Нура"}],
-                  "measureEffects":[{"measureId":"M7","name":"Школа","targetDistrictId":"nura","cost":24,"lagQuarters":3}],
-                  "synergies":[],
-                  "explanation":{"source":"template","summary":"Детерминированный результат",
-                    "strengths":["Рост показателей"],"risks":["Лаг реализации"],"recommendations":["Учесть слабейший район"]},
-                  "bestSolution":{"algorithm":"exact-enumeration","provenOptimal":true,"evaluatedCandidates":100,
-                    "decisions":[{"measureId":"M7","districtId":"nura"}],
-                    "finalScore":57.12345,"displayScore":57.12,"scoreDelta":4.56577,
-                    "budget":{"limit":100,"spent":96,"remaining":4},
-                    "districts":[{"id":"nura","name":"Нура"}],
-                    "measureEffects":[{"measureId":"M7","name":"Школа","targetDistrictId":"nura","cost":24,"lagQuarters":3}],"synergies":[]},
-                  "comparison":{"scoreGap":0.58038,"isOptimal":false}
-                }
-                """, SimulationResult.class);
+        return SimulationFixtures.templateResult(request());
     }
 }
