@@ -19,7 +19,14 @@ class ScoreCalculatorTests {
     private final CatalogService catalog = new CatalogService();
     private final ScoreCalculator calculator = new ScoreCalculator(catalog);
     private final SimulationValidator validator = new SimulationValidator(catalog);
-    private final SimulationService service = new SimulationService(validator, calculator, new SimulationExplanationService());
+    private static final SimulationOptimizer OPTIMIZER = optimizer();
+    private final SimulationService service = new SimulationService(validator, calculator, new SimulationExplanationService(),
+            OPTIMIZER, mock(SimulationLlmClient.class));
+
+    private static SimulationOptimizer optimizer() {
+        var catalog = new CatalogService();
+        return new SimulationOptimizer(catalog, new SimulationValidator(catalog), new ScoreCalculator(catalog));
+    }
 
     static SimulationRequest example() {
         return new SimulationRequest(List.of(new Decision("M7", "nura"), new Decision("M8", "nura"),
