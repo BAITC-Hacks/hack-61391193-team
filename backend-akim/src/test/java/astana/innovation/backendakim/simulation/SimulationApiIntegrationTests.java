@@ -81,6 +81,24 @@ class SimulationApiIntegrationTests {
         }
     }
 
+    @Test
+    void resubmittingBestSolutionDecisionsReproducesTheBestScore() throws Exception {
+        var first = mvc.perform(post("/api/v1/simulation/calculate").contentType(MediaType.APPLICATION_JSON)
+                        .content(SimulationRequest.EXAMPLE_JSON))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        // Sent back exactly as the frontend receives it, including "districtId": null for city measures.
+        var bestDecisions = json.readTree(first).path("bestSolution").path("decisions");
+        var best = json.readTree(first).path("bestSolution");
+
+        mvc.perform(post("/api/v1/simulation/calculate").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"decisions\":" + bestDecisions + "}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.finalScore").value(best.path("finalScore").doubleValue()))
+                .andExpect(jsonPath("$.budget.spent").value(best.path("budget").path("spent").intValue()))
+                .andExpect(jsonPath("$.comparison.isOptimal").value(true))
+                .andExpect(jsonPath("$.comparison.scoreGap").value(0.0));
+    }
+
     @ParameterizedTest(name = "{0}")
     @MethodSource("invalidScenarios")
     void rejectsInvalidScenariosWithoutScore(String code, String json) throws Exception {

@@ -15,23 +15,11 @@ build/
 *.pem
 hf_token
 
-# Models & data artifacts (keep sample JSONL + .gitkeep)
+# Local artifacts of the removed Laya/ML stack (may still exist on disk)
 .cache/
-checkpoints/*
-!checkpoints/.gitkeep
-data/processed/*
-!data/processed/.gitkeep
-models/*
-!models/.gitkeep
-!models/README.md
-*.pt
-*.safetensors
-*.bin
-*.onnx
-*.gguf
-
-# Notebooks
-notebooks/.ipynb_checkpoints/
+/checkpoints/
+/models/
+/data/
 
 # OS / IDE
 .DS_Store

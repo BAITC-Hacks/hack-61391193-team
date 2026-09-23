@@ -24,6 +24,15 @@ public final class SimulationRules {
         for (int i = 0; i < metrics.length; i++) weights.put(metrics[i], new BigDecimal(values[i]));
         METRIC_WEIGHTS = Collections.unmodifiableMap(weights);
     }
+    public static final Map<String, String> METRIC_NAMES = orderedMap(
+            "T1", "Разгрузка дорог", "T2", "Доступность общественного транспорта",
+            "E1", "Озеленение", "E2", "Качество воздуха",
+            "S1", "Школы и детсады", "S2", "Поликлиники и первичная медпомощь",
+            "B1", "Безопасность улиц", "B2", "Безопасность дорожного движения",
+            "C1", "Надёжность ЖКХ", "C2", "Скорость решения обращений жителей");
+    public static final Map<String, String> CATEGORY_NAMES = orderedMap(
+            "transport", "Транспорт", "ecology", "Экология", "social", "Соцсфера",
+            "safety", "Безопасность", "services", "Сервисы");
     public static final List<SynergyRule> SYNERGIES = List.of(
             new SynergyRule("M1", "M2", "T1", 2),
             new SynergyRule("M10", "M12", "B1", 2),
@@ -34,6 +43,12 @@ public final class SimulationRules {
             new ConflictRule("M5", "M13", true, "Чистое топливо и модернизация сетей дублируют программу в одном районе"));
 
     private SimulationRules() { }
+
+    private static Map<String, String> orderedMap(String... entries) {
+        Map<String, String> map = new LinkedHashMap<>();
+        for (int i = 0; i < entries.length; i += 2) map.put(entries[i], entries[i + 1]);
+        return Collections.unmodifiableMap(map);
+    }
 
     public record SynergyRule(String districtMeasureId, String cityMeasureId, String metric, int bonus) { }
     public record ConflictRule(String firstMeasureId, String secondMeasureId, boolean sameDistrictOnly, String reason) { }
