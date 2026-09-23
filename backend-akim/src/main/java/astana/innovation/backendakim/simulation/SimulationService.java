@@ -1,5 +1,7 @@
 package astana.innovation.backendakim.simulation;
 
+import astana.innovation.backendakim.catalog.DistrictDataset;
+
 import org.springframework.stereotype.Service;
 import java.math.RoundingMode;
 import java.util.List;
@@ -52,7 +54,7 @@ public class SimulationService {
                                     SimulationResult.OptimalSolution bestSolution, SimulationResult.Comparison comparison) {
         var score = calculation.summary().finalScore();
         var baseline = calculation.baseline().finalScore();
-        return new SimulationResult("Astana Quality of Life Score", "v1", score,
+        return new SimulationResult("Astana Quality of Life Score", DistrictDataset.MODEL_VERSION, score,
                 score.setScale(2, RoundingMode.HALF_UP), baseline, score.subtract(baseline),
                 budget(calculation),
                 SimulationRules.HORIZON, calculation.baseline(), calculation.summary(), calculation.districts(),

@@ -31,14 +31,15 @@ class SimulationApiIntegrationTests {
         for (String path : new String[]{"/api/simulation/calculate", "/api/v1/simulation/calculate"}) {
             var response = mvc.perform(post(path).contentType(MediaType.APPLICATION_JSON).content(SimulationRequest.EXAMPLE_JSON))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.finalScore").value(56.54307))
-                    .andExpect(jsonPath("$.displayScore").value(56.54))
-                    .andExpect(jsonPath("$.baselineScore").value(52.55768))
+                    .andExpect(jsonPath("$.modelVersion").value("v2-saraishyk"))
+                    .andExpect(jsonPath("$.finalScore").value(56.31781049))
+                    .andExpect(jsonPath("$.displayScore").value(56.32))
+                    .andExpect(jsonPath("$.baselineScore").value(52.33242049))
                     .andExpect(jsonPath("$.scoreDelta").value(3.98539))
                     .andExpect(jsonPath("$.budget.spent").value(95))
                     .andExpect(jsonPath("$.budget.remaining").value(5))
                     .andExpect(jsonPath("$.summary.nCrit").value(0))
-                    .andExpect(jsonPath("$.districts", hasSize(5)))
+                    .andExpect(jsonPath("$.districts", hasSize(6)))
                     .andExpect(jsonPath("$.measureEffects", hasSize(5)))
                     .andExpect(jsonPath("$.explanation.source").value("template"))
                     .andExpect(jsonPath("$.bestSolution.algorithm").value("exhaustive-search"))
@@ -100,7 +101,8 @@ class SimulationApiIntegrationTests {
         return Stream.of(
                 Arguments.of(scenario("M4:esil", "M7:nura", "M9:nura", "M10:nura", "M12"), 75),
                 Arguments.of(scenario("M5:saryarka", "M13:almaty", "M9:nura", "M10:nura", "M12"), 89),
-                Arguments.of(scenario("M9:nura", "M11:nura", "M10:nura", "M12", "M4:saryarka"), 61));
+                Arguments.of(scenario("M9:nura", "M11:nura", "M10:nura", "M12", "M4:saryarka"), 61),
+                Arguments.of(scenario("M7:saraishyk", "M8:nura", "M10:nura", "M12", "M5:saryarka"), 95));
     }
 
     @Test
@@ -122,7 +124,7 @@ class SimulationApiIntegrationTests {
     @Test
     void exposesBaselineSwaggerAndMachineReadableOpenApiWithExample() throws Exception {
         mvc.perform(get("/api/simulation/baseline")).andExpect(status().isOk())
-                .andExpect(jsonPath("$.finalScore").value(52.55768)).andExpect(jsonPath("$.summary.nCrit").value(2))
+                .andExpect(jsonPath("$.finalScore").value(52.33242049)).andExpect(jsonPath("$.summary.nCrit").value(2))
                 .andExpect(jsonPath("$.bestSolution").doesNotExist())
                 .andExpect(jsonPath("$.comparison").doesNotExist());
         mvc.perform(get("/v3/api-docs")).andExpect(status().isOk())

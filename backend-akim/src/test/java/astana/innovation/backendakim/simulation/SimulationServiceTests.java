@@ -47,7 +47,7 @@ class SimulationServiceTests {
     void baselineDoesNotStartOptimizationOrCallLlm() {
         var result = service.baseline();
 
-        assertThat(result.finalScore()).isEqualByComparingTo("52.55768");
+        assertThat(result.finalScore()).isEqualByComparingTo("52.33242049");
         assertThat(result.explanation().source()).isEqualTo("template");
         assertThat(result.bestSolution()).isNull();
         assertThat(result.comparison()).isNull();
@@ -75,7 +75,7 @@ class SimulationServiceTests {
                 new Decision("M12", null));
 
         var deterministic = sentResult.getValue();
-        assertThat(deterministic.finalScore()).isEqualByComparingTo("56.54307");
+        assertThat(deterministic.finalScore()).isEqualByComparingTo("56.31781049");
         assertThat(deterministic.bestSolution().decisions()).isEqualTo(bestRequest.decisions());
         assertThat(deterministic.bestSolution().finalScore()).isEqualByComparingTo(bestCalculation.summary().finalScore());
         assertThat(deterministic.bestSolution().evaluatedCandidates()).isEqualTo(123L);

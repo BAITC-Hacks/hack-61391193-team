@@ -1,4 +1,4 @@
-# Only the Java sources and six runtime map files belong in this build context.
+# Only the Java sources/resources and runtime map files belong in this build context.
 # This file overrides the root .dockerignore for backend-akim/Dockerfile.
 **
 !backend-akim/
@@ -15,3 +15,4 @@
 !data1/overture/astana/parks.geojson
 !data1/overture/astana/pois.geojson
 !data1/overture/astana/roads_main.geojson
+!data1/overture/astana/lrt.geojson

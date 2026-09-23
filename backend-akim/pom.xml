@@ -121,6 +121,7 @@
                     <include>parks.geojson</include>
                     <include>pois.geojson</include>
                     <include>roads_main.geojson</include>
+                    <include>lrt.geojson</include>
                 </includes>
             </resource>
         </resources>

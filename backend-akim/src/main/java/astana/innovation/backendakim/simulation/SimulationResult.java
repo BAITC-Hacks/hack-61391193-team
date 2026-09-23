@@ -1,5 +1,6 @@
 package astana.innovation.backendakim.simulation;
 
+import astana.innovation.backendakim.catalog.DistrictProvenance;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.util.List;
@@ -8,8 +9,8 @@ import java.util.Map;
 public record SimulationResult(
         String metricName,
         String modelVersion,
-        @Schema(description = "Точный Score без промежуточного округления", example = "56.54307") BigDecimal finalScore,
-        @Schema(description = "Score, округлённый до 2 знаков для показа", example = "56.54") BigDecimal displayScore,
+        @Schema(description = "Точный Score без промежуточного округления", example = "56.31781049") BigDecimal finalScore,
+        @Schema(description = "Score, округлённый до 2 знаков для показа", example = "56.32") BigDecimal displayScore,
         BigDecimal baselineScore,
         BigDecimal scoreDelta,
         Budget budget,
@@ -38,7 +39,17 @@ public record SimulationResult(
     public record DistrictResult(
             String id, String name, BigDecimal populationShare,
             Map<String, BigDecimal> before, Map<String, BigDecimal> after, Map<String, BigDecimal> metricDeltas,
-            BigDecimal scoreBefore, BigDecimal scoreAfter, BigDecimal scoreDelta) { }
+            BigDecimal scoreBefore, BigDecimal scoreAfter, BigDecimal scoreDelta,
+            @Schema(description = "Происхождение данных и допущения, зафиксированные при расчёте; null в старых сохранениях")
+            DistrictProvenance dataProvenance) {
+        public DistrictResult(String id, String name, BigDecimal populationShare,
+                              Map<String, BigDecimal> before, Map<String, BigDecimal> after,
+                              Map<String, BigDecimal> metricDeltas,
+                              BigDecimal scoreBefore, BigDecimal scoreAfter, BigDecimal scoreDelta) {
+            this(id, name, populationShare, before, after, metricDeltas,
+                    scoreBefore, scoreAfter, scoreDelta, null);
+        }
+    }
 
     public record MeasureEffect(
             String measureId, String name, String categoryId, String scope, String targetDistrictId,

@@ -37,7 +37,7 @@ class HistoryWithoutDatabaseTests {
                 .andExpect(status().isServiceUnavailable());
         mvc.perform(post("/api/simulation/calculate").contentType(MediaType.APPLICATION_JSON)
                         .content(SimulationRequest.EXAMPLE_JSON))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.finalScore").value(56.54307));
+                .andExpect(status().isOk()).andExpect(jsonPath("$.finalScore").value(56.31781049));
     }
 
     @Test
