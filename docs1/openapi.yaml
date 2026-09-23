@@ -2,147 +2,178 @@ openapi: 3.1.0
 info:
   title: Аким на 5 часов — Astana Quality of Life Score
   description: "Синтетическая модель хакатона: выберите ровно 5 мероприятий на бюд\
-    жет до 100. Расчёт и поиск лучшего набора детерминированные; объяснение формируется LLM при настройке API или по шаблону.\
-    \ Откройте POST /api/simulation/calculate, нажмите Try it out и Execute: приме\
-    р уже заполнен. Score примера = 56.54307, базовый = 52.55768. Для сохранения в PostgreSQL зарегистрируйтесь через POST /api/v1/auth/register или войдите через /api/v1/auth/login, введите accessToken в BearerAuth через Authorize и используйте раздел History."
+    жет до 100. Расчёт и поиск лучшего набора детерминированные; объяснение формир\
+    уется LLM при настройке API или по шаблону. Откройте POST /api/simulation/calculate,\
+    \ нажмите Try it out и Execute: пример уже заполнен. Модель v2-saraishyk: 6 ра\
+    йонов, включая Сарайшык. Score примера = 56.31781049, базовый = 52.33242049. Д\
+    ля сохранения в PostgreSQL зарегистрируйтесь через POST /api/v1/auth/register\
+    \ или войдите через /api/v1/auth/login, введите JWT accessToken через Authorize\
+    \ (BearerAuth) и используйте раздел History."
   version: v1
 servers:
-- url: http://localhost:8080
-  description: Запуск из IDE
 - url: http://localhost:8081
-  description: Docker Compose с профилем postgres
+  description: Generated server url
 tags:
+- name: History
+  description: Сохранение и история сценариев текущего пользователя. Требуется профиль
+    postgres.
+- name: Admin
+  description: Доступ только для аккаунтов с ролью ADMIN
+- name: Auth
+  description: "Регистрация, вход и текущий аккаунт. Требуется профиль postgres."
 - name: Simulation
   description: Расчёт Astana Quality of Life Score и объяснение результата
-- name: History
-  description: Сохранение и история сценариев владельца JWT или прежнего анонимного токена. Требуется профиль postgres.
-- name: Auth
-  description: Регистрация, вход и профиль пользователя. Требуется профиль postgres.
-- name: Admin
-  description: Маршруты пользователя с ролью ADMIN. Требуется JWT зарегистрированного аккаунта.
 paths:
-  /api/v1/auth/register:
+  /api/v1/users/anonymous:
     post:
-      tags: [Auth]
-      summary: Зарегистрироваться и получить JWT
-      description: Создаёт аккаунт с ролью USER. Email нормализуется и должен быть уникальным; адрес администратора зарезервирован. Пароль хранится как BCrypt-хеш. Ответ не кешируется.
-      operationId: register
+      tags:
+      - History
+      summary: Создать анонимный профиль для истории (совместимость)
+      description: "Без тела запроса. Сохраните accessToken на клиенте: он возвращ\
+        ается один раз. Один профиль создаётся один раз для браузера; повторный POST\
+        \ создаст другой профиль. Токен бессрочный. Для новых пользователей исполь\
+        зуйте /api/v1/auth/register и JWT."
+      operationId: createUser
+      responses:
+        "201":
+          description: "Профиль сохранён, токен выдан"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AnonymousUserResponse"
+        "503":
+          description: Хранилище недоступно или профиль postgres выключен
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+      deprecated: true
+  /api/v1/simulations:
+    get:
+      tags:
+      - History
+      summary: История текущего профиля
+      description: "Краткие результаты, сначала новые: createdAt DESC, id DESC. Па\
+        раметр userId не принимается: владелец определяется по токену."
+      operationId: list
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: string
+          default: "20"
+          maximum: 100
+          minimum: 1
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: string
+          default: "0"
+          minimum: 0
+      responses:
+        "200":
+          description: "Страница истории, в том числе пустая"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SimulationHistoryPage"
+        "400":
+          description: Некорректные limit или offset
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "401":
+          description: Токен отсутствует или недействителен
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "503":
+          description: Хранилище недоступно или профиль postgres выключен
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+      security:
+      - BearerAuth: []
+      - AnonymousBearer: []
+    post:
+      tags:
+      - History
+      summary: Рассчитать и сохранить сценарий
+      description: "Валидирует 5 решений, рассчитывает Score и сохраняет исходный\
+        \ выбор и полный результат. 201 возвращается после завершения транзакции.\
+        \ Каждый успешный POST создаёт новую запись."
+      operationId: save
       requestBody:
-        required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RegisterRequest'
+              $ref: "#/components/schemas/SimulationRequest"
             example:
-              email: user@example.com
-              password: UserPass123!
-              username: user
-      responses:
-        '201':
-          description: Аккаунт создан, JWT выдан. Cache-Control no-store.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AuthResponse'
-        '400':
-          $ref: '#/components/responses/AuthBadRequest'
-        '409':
-          description: Email уже зарегистрирован или зарезервирован для администратора
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetail'
-        '503':
-          $ref: '#/components/responses/HistoryUnavailable'
-  /api/v1/auth/login:
-    post:
-      tags: [Auth]
-      summary: Войти по email и паролю
-      description: Возвращает JWT для существующего аккаунта. Неизвестный email и неверный пароль дают одинаковый 401. Локальный администратор создаётся при первом запуске с реквизитами из ADMIN_EMAIL и ADMIN_PASSWORD.
-      operationId: login
-      requestBody:
+              decisions:
+              - measureId: M7
+                districtId: nura
+              - measureId: M8
+                districtId: nura
+              - measureId: M10
+                districtId: nura
+              - measureId: M12
+              - measureId: M5
+                districtId: saryarka
         required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/LoginRequest'
-            example:
-              email: admin@example.com
-              password: Admin
       responses:
-        '200':
-          description: JWT и профиль пользователя. Cache-Control no-store.
-          content:
-            application/json:
+        "201":
+          description: Сценарий сохранён. Location указывает маршрут чтения
+          headers:
+            Location:
+              description: Маршрут чтения сохранённого сценария
+              style: simple
               schema:
-                $ref: '#/components/schemas/AuthResponse'
-        '400':
-          $ref: '#/components/responses/AuthBadRequest'
-        '401':
-          description: Неверный email или пароль
+                type: string
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SavedSimulationResponse"
+        "400":
+          description: Некорректный JSON или отсутствует тело
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
-        '503':
-          $ref: '#/components/responses/HistoryUnavailable'
-  /api/v1/auth/me:
-    get:
-      tags: [Auth]
-      summary: Профиль текущего зарегистрированного пользователя
-      description: Данные аккаунта из БД. Требуется действующий JWT; анонимный токен не допускается.
-      operationId: me
+                $ref: "#/components/schemas/ProblemDetail"
+        "401":
+          description: Токен отсутствует или недействителен
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "422":
+          description: Невалидный сценарий; запись не создаётся
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ValidationProblem"
+        "503":
+          description: Хранилище недоступно или профиль postgres выключен
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
       security:
       - BearerAuth: []
-      responses:
-        '200':
-          description: Профиль пользователя. Cache-Control no-store.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AuthUserResponse'
-        '401':
-          $ref: '#/components/responses/HistoryUnauthorized'
-        '403':
-          description: Анонимный профиль не является зарегистрированным аккаунтом
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetail'
-        '503':
-          $ref: '#/components/responses/HistoryUnavailable'
-  /api/v1/admin/me:
-    get:
-      tags: [Admin]
-      summary: Профиль администратора и проверка прав
-      description: Требуется JWT пользователя с текущей ролью ADMIN в БД. Роль USER получает 403. Маршрут не предоставляет доступ к чужой истории.
-      operationId: adminMe
-      security:
-      - BearerAuth: []
-      responses:
-        '200':
-          description: Профиль администратора. Cache-Control no-store.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AuthUserResponse'
-        '401':
-          $ref: '#/components/responses/HistoryUnauthorized'
-        '403':
-          description: Требуется роль ADMIN
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetail'
-        '503':
-          $ref: '#/components/responses/HistoryUnavailable'
+      - AnonymousBearer: []
   /api/simulation/calculate:
     post:
       tags:
       - Simulation
       summary: Рассчитать Score для 5 мероприятий
       description: "Проверяет бюджет, повторы, лимит направления, районы и конфлик\
-        ты. Применяет lag, synergy и clip, находит глобально лучший набор и сравнивает его с выбором пользователя. При настроенном LLM передаёт оба рассчитанных результата для объяснения; иначе использует шаблон."
+        ты. Применяет lag, synergy и clip, находит глобально лучший набор и сравни\
+        вает его с выбором пользователя. При настроенном LLM передаёт оба рассчита\
+        нных результата для объяснения; иначе использует шаблон."
       operationId: calculate
       requestBody:
         content:
@@ -150,12 +181,25 @@ paths:
             schema:
               $ref: "#/components/schemas/SimulationRequest"
             examples:
-              'Пример из датасета: 95 единиц → 56.54307':
-                description: "Пример из датасета: 95 единиц → 56.54307"
+              'Пример v2-saraishyk: 95 единиц → 56.31781049':
+                description: "Пример v2-saraishyk: 95 единиц → 56.31781049"
                 value:
                   decisions:
                   - measureId: M7
                     districtId: nura
+                  - measureId: M8
+                    districtId: nura
+                  - measureId: M10
+                    districtId: nura
+                  - measureId: M12
+                  - measureId: M5
+                    districtId: saryarka
+              'Школа в Сарайшыке: 95 единиц → 54.95216719':
+                description: "Школа в Сарайшыке: 95 единиц → 54.95216719"
+                value:
+                  decisions:
+                  - measureId: M7
+                    districtId: saraishyk
                   - measureId: M8
                     districtId: nura
                   - measureId: M10
@@ -190,7 +234,9 @@ paths:
       - Simulation
       summary: Рассчитать Score для 5 мероприятий
       description: "Проверяет бюджет, повторы, лимит направления, районы и конфлик\
-        ты. Применяет lag, synergy и clip, находит глобально лучший набор и сравнивает его с выбором пользователя. При настроенном LLM передаёт оба рассчитанных результата для объяснения; иначе использует шаблон."
+        ты. Применяет lag, synergy и clip, находит глобально лучший набор и сравни\
+        вает его с выбором пользователя. При настроенном LLM передаёт оба рассчита\
+        нных результата для объяснения; иначе использует шаблон."
       operationId: calculate_1
       requestBody:
         content:
@@ -198,12 +244,25 @@ paths:
             schema:
               $ref: "#/components/schemas/SimulationRequest"
             examples:
-              'Пример из датасета: 95 единиц → 56.54307':
-                description: "Пример из датасета: 95 единиц → 56.54307"
+              'Пример v2-saraishyk: 95 единиц → 56.31781049':
+                description: "Пример v2-saraishyk: 95 единиц → 56.31781049"
                 value:
                   decisions:
                   - measureId: M7
                     districtId: nura
+                  - measureId: M8
+                    districtId: nura
+                  - measureId: M10
+                    districtId: nura
+                  - measureId: M12
+                  - measureId: M5
+                    districtId: saryarka
+              'Школа в Сарайшыке: 95 единиц → 54.95216719':
+                description: "Школа в Сарайшыке: 95 единиц → 54.95216719"
+                value:
+                  decisions:
+                  - measureId: M7
+                    districtId: saraishyk
                   - measureId: M8
                     districtId: nura
                   - measureId: M10
@@ -232,6 +291,140 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
+  /api/v1/auth/register:
+    post:
+      tags:
+      - Auth
+      summary: Зарегистрировать пользователя и получить JWT
+      description: Email уникален без учёта регистра. Новый аккаунт всегда имеет роль
+        USER.
+      operationId: register
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+            example:
+              email: user@example.com
+              password: Password123!
+              username: user
+        required: true
+      responses:
+        "201":
+          description: Аккаунт сохранён; JWT готов к использованию
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Некорректные поля
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "409":
+          description: Email уже занят или зарезервирован
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "503":
+          description: База данных недоступна или профиль postgres выключен
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+  /api/v1/auth/login:
+    post:
+      tags:
+      - Auth
+      summary: Войти по email и паролю
+      description: Выдаёт JWT с ограниченным сроком действия. Email или пароль неверен
+        — одинаковый ответ 401.
+      operationId: login
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+            example:
+              email: admin@example.com
+              password: Admin
+        required: true
+      responses:
+        "200":
+          description: JWT и профиль пользователя
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Некорректное тело запроса
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "401":
+          description: Неверный email или пароль
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "503":
+          description: База данных недоступна или профиль postgres выключен
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+  /api/v1/simulations/{id}:
+    get:
+      tags:
+      - History
+      summary: Прочитать сохранённый сценарий
+      description: Возвращает исходные решения и сохранённый результат без нового
+        расчёта. Чужой и отсутствующий сценарии одинаково возвращают 404.
+      operationId: find
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: Сохранённый сценарий
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SavedSimulationResponse"
+        "400":
+          description: id должен быть UUID
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "401":
+          description: Токен отсутствует или недействителен
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          description: Сценарий не найден в текущем профиле
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "503":
+          description: Хранилище недоступно или профиль postgres выключен
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+      security:
+      - BearerAuth: []
+      - AnonymousBearer: []
   /api/v1/simulation/bootstrap:
     get:
       tags:
@@ -249,8 +442,8 @@ paths:
       tags:
       - Simulation
       summary: Базовые показатели и Score без действий
-      description: "Score = 52.55768. Это справочный расчёт, не сценарий из 5 реше\
-        ний."
+      description: "Score модели v2-saraishyk = 52.33242049. Это справочный расчёт\
+        , не сценарий из 5 решений."
       operationId: baseline
       responses:
         "200":
@@ -264,8 +457,8 @@ paths:
       tags:
       - Simulation
       summary: Базовые показатели и Score без действий
-      description: "Score = 52.55768. Это справочный расчёт, не сценарий из 5 реше\
-        ний."
+      description: "Score модели v2-saraishyk = 52.33242049. Это справочный расчёт\
+        , не сценарий из 5 решений."
       operationId: baseline_1
       responses:
         "200":
@@ -288,6 +481,22 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/MeasureResponse"
+  /api/v1/measures/M3/context:
+    get:
+      tags:
+      - lrt-context-controller
+      summary: Официальные сведения о ЛРТ Астаны для M3
+      description: Справочный снимок с датами и источниками. Геометрия маршрута доступна
+        отдельно в /api/v1/map/lrt; покрытие неполное. Эти данные не меняют Score.
+      operationId: getContext
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
   /api/v1/map/roads:
     get:
       tags:
@@ -327,6 +536,18 @@ paths:
               schema:
                 type: string
                 format: byte
+  /api/v1/map/lrt:
+    get:
+      tags:
+      - map-data-controller
+      operationId: getLrt
+      responses:
+        "200":
+          description: GeoJSON ЛРТ для M3 с метаданными об источнике и неполноте
+          content:
+            application/geo+json:
+              schema:
+                type: object
   /api/v1/map/layers:
     get:
       tags:
@@ -430,262 +651,74 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/DistrictMeasureResponse"
-  /api/v1/users/anonymous:
-    post:
-      tags: [History]
-      summary: Создать анонимный профиль для истории
-      description: Маршрут совместимости без тела запроса. Для новых аккаунтов используйте регистрацию и вход через JWT. Анонимный токен выдаётся один раз и действует только для истории; переноса истории в зарегистрированный аккаунт пока нет.
-      operationId: createUser
+  /api/v1/auth/me:
+    get:
+      tags:
+      - Auth
+      summary: Получить текущий аккаунт по JWT
+      operationId: me
       responses:
-        '201':
-          description: Профиль сохранён, токен выдан. Cache-Control no-store.
+        "200":
+          description: "Публичные поля профиля, без пароля"
           content:
-            application/json:
+            '*/*':
               schema:
-                $ref: '#/components/schemas/AnonymousUserResponse'
-        '503':
-          $ref: '#/components/responses/HistoryUnavailable'
-  /api/v1/simulations:
-    post:
-      tags: [History]
-      summary: Рассчитать и сохранить сценарий
-      description: Валидирует 5 решений и сохраняет полный результат. 201 возвращается после завершения транзакции. Каждый успешный POST создаёт новую запись.
-      operationId: save
-      security:
-      - BearerAuth: []
-      - AnonymousBearer: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SimulationRequest'
-            example:
-              decisions:
-              - measureId: M7
-                districtId: nura
-              - measureId: M8
-                districtId: nura
-              - measureId: M10
-                districtId: nura
-              - measureId: M12
-              - measureId: M5
-                districtId: saryarka
-      responses:
-        '201':
-          description: Сценарий сохранён. Cache-Control no-store.
-          headers:
-            Location:
-              description: Маршрут чтения сохранённого сценария
-              schema:
-                type: string
-                example: /api/v1/simulations/11111111-1111-4111-8111-111111111111
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SavedSimulationResponse'
-        '400':
-          $ref: '#/components/responses/HistoryBadRequest'
-        '401':
-          $ref: '#/components/responses/HistoryUnauthorized'
-        '422':
-          description: Невалидный набор решений; запись не создаётся
+                $ref: "#/components/schemas/AuthUserResponse"
+        "401":
+          description: "JWT отсутствует, недействителен или истёк"
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ValidationProblem'
-        '503':
-          $ref: '#/components/responses/HistoryUnavailable'
-    get:
-      tags: [History]
-      summary: История текущего профиля
-      description: Краткие результаты, сначала новые — createdAt DESC, id DESC. Владелец определяется по токену, фильтр userId не поддерживается.
-      operationId: list
-      security:
-      - BearerAuth: []
-      - AnonymousBearer: []
-      parameters:
-      - name: limit
-        in: query
-        schema:
-          type: integer
-          format: int32
-          minimum: 1
-          maximum: 100
-          default: 20
-      - name: offset
-        in: query
-        schema:
-          type: integer
-          format: int64
-          minimum: 0
-          default: 0
-      responses:
-        '200':
-          description: Страница истории, в том числе пустая. Cache-Control no-store.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SimulationHistoryPage'
-        '400':
-          $ref: '#/components/responses/HistoryBadRequest'
-        '401':
-          $ref: '#/components/responses/HistoryUnauthorized'
-        '503':
-          $ref: '#/components/responses/HistoryUnavailable'
-  /api/v1/simulations/{id}:
-    get:
-      tags: [History]
-      summary: Прочитать сохранённый сценарий
-      description: Исходные решения и сохранённый результат без нового расчёта. Чужой и отсутствующий сценарии одинаково возвращают 404.
-      operationId: find
-      security:
-      - BearerAuth: []
-      - AnonymousBearer: []
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '200':
-          description: Сохранённый сценарий. Cache-Control no-store.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SavedSimulationResponse'
-        '400':
-          $ref: '#/components/responses/HistoryBadRequest'
-        '401':
-          $ref: '#/components/responses/HistoryUnauthorized'
-        '404':
-          description: Сценарий не найден в текущем профиле
+                $ref: "#/components/schemas/ProblemDetail"
+        "403":
+          description: Анонимный профиль не является зарегистрированным аккаунтом
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ProblemDetail'
-        '503':
-          $ref: '#/components/responses/HistoryUnavailable'
+                $ref: "#/components/schemas/ProblemDetail"
+        "503":
+          description: База данных недоступна или профиль postgres выключен
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+      security:
+      - BearerAuth: []
+  /api/v1/admin/me:
+    get:
+      tags:
+      - Admin
+      summary: Проверить вход в админку и получить профиль администратора
+      operationId: me_1
+      responses:
+        "200":
+          description: Текущий администратор
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AuthUserResponse"
+        "401":
+          description: Требуется действующий JWT
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "403":
+          description: Аккаунт не является администратором
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "503":
+          description: Хранилище недоступно или профиль postgres выключен
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+      security:
+      - BearerAuth: []
 components:
-  securitySchemes:
-    BearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
-      description: Получите accessToken через POST /api/v1/auth/register или /api/v1/auth/login. JWT HS256 действует по умолчанию 3600 секунд. В Swagger вставляйте только токен без префикса Bearer.
-    AnonymousBearer:
-      type: http
-      scheme: bearer
-      description: Совместимость со старой анонимной историей. accessToken из POST /api/v1/users/anonymous, без префикса Bearer. Не подходит для auth/me и admin/me.
-  responses:
-    AuthBadRequest:
-      description: Некорректный JSON, отсутствующие или недопустимые поля. Пароль и его хеш не возвращаются.
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/ProblemDetail'
-    HistoryBadRequest:
-      description: Некорректное тело, UUID или параметры страницы
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/ProblemDetail'
-    HistoryUnauthorized:
-      description: Токен отсутствует или недействителен
-      headers:
-        WWW-Authenticate:
-          schema:
-            type: string
-            example: Bearer
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/ProblemDetail'
-    HistoryUnavailable:
-      description: Хранилище недоступно или профиль postgres выключен
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/ProblemDetail'
   schemas:
-    RegisterRequest:
-      type: object
-      required: [email, password, username]
-      properties:
-        email:
-          type: string
-          format: email
-          maxLength: 254
-          description: Уникальный email; пробелы по краям удаляются, регистр приводится к нижнему
-          example: user@example.com
-        password:
-          type: string
-          format: password
-          writeOnly: true
-          minLength: 8
-          maxLength: 72
-          description: Дополнительно максимум 72 байта UTF-8. Пароль не обрезается и не нормализуется.
-          example: UserPass123!
-        username:
-          type: string
-          minLength: 3
-          maxLength: 50
-          description: Отображаемое имя после удаления пробелов по краям
-          example: user
-    LoginRequest:
-      type: object
-      required: [email, password]
-      properties:
-        email:
-          type: string
-          format: email
-          maxLength: 254
-          example: admin@example.com
-        password:
-          type: string
-          format: password
-          writeOnly: true
-          minLength: 1
-          maxLength: 72
-          description: Проверяется без удаления пробелов; для заданного администратора допустим пароль Admin.
-          example: Admin
-    AuthResponse:
-      type: object
-      required: [accessToken, tokenType, expiresIn, user]
-      properties:
-        accessToken:
-          type: string
-          description: JWT, подписанный HS256; передаётся как Bearer в Authorization
-        tokenType:
-          type: string
-          enum: [Bearer]
-        expiresIn:
-          type: integer
-          format: int64
-          description: Время действия нового JWT в секундах
-          example: 3600
-        user:
-          $ref: '#/components/schemas/AuthUserResponse'
-    AuthUserResponse:
-      type: object
-      required: [id, email, username, role, createdAt]
-      properties:
-        id:
-          type: string
-          format: uuid
-        email:
-          type: string
-          format: email
-        username:
-          type: string
-        role:
-          type: string
-          enum: [USER, ADMIN]
-        createdAt:
-          type: string
-          format: date-time
     AnonymousUserResponse:
       type: object
       properties:
@@ -694,65 +727,33 @@ components:
           format: uuid
         accessToken:
           type: string
-          description: Секретный токен профиля, выдаётся только при создании
+          description: Секретный токен профиля. Возвращается только при создании;
+            сохраните на клиенте.
         tokenType:
           type: string
           example: Bearer
         createdAt:
           type: string
           format: date-time
-    SavedSimulationResponse:
+    ProblemDetail:
       type: object
       properties:
-        id:
+        type:
           type: string
-          format: uuid
-        userId:
+          format: uri
+        title:
           type: string
-          format: uuid
-        createdAt:
-          type: string
-          format: date-time
-        request:
-          $ref: '#/components/schemas/SimulationRequest'
-        result:
-          $ref: '#/components/schemas/SimulationResult'
-    SimulationHistoryPage:
-      type: object
-      properties:
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/SimulationHistoryItem'
-        limit:
+        status:
           type: integer
           format: int32
-        offset:
-          type: integer
-          format: int64
-        hasMore:
-          type: boolean
-          description: Есть ещё записи после текущей страницы
-    SimulationHistoryItem:
-      type: object
-      properties:
-        id:
+        detail:
           type: string
-          format: uuid
-        createdAt:
+        instance:
           type: string
-          format: date-time
-        modelVersion:
-          type: string
-        finalScore:
-          type: number
-        baselineScore:
-          type: number
-        scoreDelta:
-          type: number
-        budgetSpent:
-          type: integer
-          format: int32
+          format: uri
+        properties:
+          type: object
+          additionalProperties: {}
     Decision:
       type: object
       properties:
@@ -771,6 +772,7 @@ components:
           - saryarka
           - baikonur
           - nura
+          - saraishyk
           example: nura
       required:
       - measureId
@@ -810,6 +812,17 @@ components:
         remaining:
           type: integer
           format: int32
+    Comparison:
+      type: object
+      properties:
+        scoreGap:
+          type: number
+          description: "Точная разница bestSolution.finalScore − finalScore, без о\
+            кругления"
+        isOptimal:
+          type: boolean
+          description: "Score пользователя равен глобальному максимуму, даже если\
+            \ выбран другой набор"
     CriticalMetric:
       type: object
       properties:
@@ -821,6 +834,31 @@ components:
           type: string
         value:
           type: number
+    DistrictProvenance:
+      type: object
+      properties:
+        modelVersion:
+          type: string
+        syntheticMetrics:
+          type: boolean
+          description: "true: показатели T1–C2 — синтетические индексы модели, не\
+            \ официальная статистика"
+        metricsMethod:
+          type: string
+        populationShareMethod:
+          type: string
+        metricAssumptions:
+          type: object
+          additionalProperties:
+            type: string
+        facts:
+          type: array
+          items:
+            $ref: "#/components/schemas/Fact"
+        sources:
+          type: array
+          items:
+            $ref: "#/components/schemas/Source"
     DistrictResult:
       type: object
       properties:
@@ -848,12 +886,17 @@ components:
           type: number
         scoreDelta:
           type: number
+        dataProvenance:
+          $ref: "#/components/schemas/DistrictProvenance"
+          description: "Происхождение данных и допущения, зафиксированные при расч\
+            ёте; null в старых сохранениях"
     Explanation:
       type: object
       properties:
         source:
           type: string
-          description: "template: объяснение по рассчитанным данным; llm: резюме от LLM, списки из расчёта"
+          description: "template: объяснение по рассчитанным данным; llm: резюме о\
+            т LLM, списки из расчёта"
         summary:
           type: string
         strengths:
@@ -868,6 +911,19 @@ components:
           type: array
           items:
             type: string
+    Fact:
+      type: object
+      properties:
+        key:
+          type: string
+        value:
+          type: string
+        unit:
+          type: string
+        asOf:
+          type: string
+        sourceId:
+          type: string
     MeasureEffect:
       type: object
       properties:
@@ -903,6 +959,61 @@ components:
           type: number
           description: Прямой вклад в D района до clip и синергий; не вклад в нелинейный
             FINAL SCORE
+    OptimalSolution:
+      type: object
+      properties:
+        algorithm:
+          type: string
+        provenOptimal:
+          type: boolean
+        evaluatedCandidates:
+          type: integer
+          format: int64
+        decisions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Decision"
+        finalScore:
+          type: number
+        displayScore:
+          type: number
+        scoreDelta:
+          type: number
+        budget:
+          $ref: "#/components/schemas/Budget"
+        summary:
+          $ref: "#/components/schemas/ScoreSummary"
+        districts:
+          type: array
+          items:
+            $ref: "#/components/schemas/DistrictResult"
+        measureEffects:
+          type: array
+          items:
+            $ref: "#/components/schemas/MeasureEffect"
+        synergies:
+          type: array
+          items:
+            $ref: "#/components/schemas/AppliedSynergy"
+    SavedSimulationResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        request:
+          $ref: "#/components/schemas/SimulationRequest"
+          description: "Исходный выбор пользователя: мероприятия и районы в порядк\
+            е запроса"
+        result:
+          $ref: "#/components/schemas/SimulationResult"
+          description: Полный результат на момент сохранения. При чтении не пересчитывается.
     ScoreSummary:
       type: object
       properties:
@@ -939,11 +1050,11 @@ components:
         finalScore:
           type: number
           description: Точный Score без промежуточного округления
-          example: 56.54307
+          example: 56.31781049
         displayScore:
           type: number
           description: "Score, округлённый до 2 знаков для показа"
-          example: 56.54
+          example: 56.32
         baselineScore:
           type: number
         scoreDelta:
@@ -972,57 +1083,23 @@ components:
         explanation:
           $ref: "#/components/schemas/Explanation"
         bestSolution:
-          description: Глобально лучший допустимый набор для текущего каталога; null для baseline и старых сохранений
           $ref: "#/components/schemas/OptimalSolution"
+          description: Глобально лучший допустимый набор для текущего каталога; null
+            для baseline и старых сохранений
         comparison:
-          description: Сравнение завершённого выбора пользователя с максимумом Score
           $ref: "#/components/schemas/Comparison"
-    OptimalSolution:
+          description: Сравнение завершённого выбора пользователя с максимумом Score
+    Source:
       type: object
       properties:
-        algorithm:
+        id:
           type: string
-          example: exhaustive-search
-        provenOptimal:
-          type: boolean
-        evaluatedCandidates:
-          type: integer
-          format: int64
-        decisions:
-          type: array
-          items:
-            $ref: "#/components/schemas/Decision"
-        finalScore:
-          type: number
-        displayScore:
-          type: number
-        scoreDelta:
-          type: number
-        budget:
-          $ref: "#/components/schemas/Budget"
-        summary:
-          $ref: "#/components/schemas/ScoreSummary"
-        districts:
-          type: array
-          items:
-            $ref: "#/components/schemas/DistrictResult"
-        measureEffects:
-          type: array
-          items:
-            $ref: "#/components/schemas/MeasureEffect"
-        synergies:
-          type: array
-          items:
-            $ref: "#/components/schemas/AppliedSynergy"
-    Comparison:
-      type: object
-      properties:
-        scoreGap:
-          type: number
-          description: Точная разница bestSolution.finalScore − finalScore, без округления
-        isOptimal:
-          type: boolean
-          description: Score пользователя равен глобальному максимуму, даже если выбран другой набор
+        title:
+          type: string
+        url:
+          type: string
+        asOf:
+          type: string
     ValidationProblem:
       type: object
       properties:
@@ -1050,25 +1127,124 @@ components:
           type: string
         message:
           type: string
-    ProblemDetail:
+    RegisterRequest:
       type: object
       properties:
-        type:
+        email:
           type: string
-          format: uri
-        title:
+          format: email
+          description: "Email; пробелы по краям удаляются, регистр не учитывается"
+          example: user@example.com
+          maxLength: 254
+          minLength: 0
+        password:
           type: string
-        status:
+          format: password
+          description: От 8 символов до 72 байт UTF-8
+          example: MyPassword123
+          maxLength: 72
+          minLength: 8
+        username:
+          type: string
+          description: Отображаемое имя пользователя
+          example: Ayanat
+          maxLength: 50
+          minLength: 3
+      required:
+      - email
+      - password
+      - username
+    AuthResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          description: "JWT для Authorization: Bearer <accessToken>"
+        tokenType:
+          type: string
+          example: Bearer
+        expiresIn:
+          type: integer
+          format: int64
+          description: Срок действия токена в секундах
+          example: 3600
+        user:
+          $ref: "#/components/schemas/AuthUserResponse"
+    AuthUserResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          example: user@example.com
+        username:
+          type: string
+          example: Ayanat
+        role:
+          type: string
+          enum:
+          - USER
+          - ADMIN
+        createdAt:
+          type: string
+          format: date-time
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          example: admin@example.com
+          maxLength: 254
+          minLength: 0
+        password:
+          type: string
+          format: password
+          description: Пароль без удаления пробелов
+          example: Admin
+          maxLength: 72
+          minLength: 0
+      required:
+      - email
+      - password
+    SimulationHistoryItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        modelVersion:
+          type: string
+        finalScore:
+          type: number
+        baselineScore:
+          type: number
+        scoreDelta:
+          type: number
+        budgetSpent:
           type: integer
           format: int32
-        detail:
-          type: string
-        instance:
-          type: string
-          format: uri
-        properties:
-          type: object
-          additionalProperties: {}
+    SimulationHistoryPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/SimulationHistoryItem"
+        limit:
+          type: integer
+          format: int32
+        offset:
+          type: integer
+          format: int64
+        hasMore:
+          type: boolean
+          description: Есть ещё записи после этой страницы
     ApiLinks:
       type: object
       properties:
@@ -1094,6 +1270,8 @@ components:
       type: object
       properties:
         apiVersion:
+          type: string
+        modelVersion:
           type: string
         budgetLimit:
           type: integer
@@ -1145,6 +1323,8 @@ components:
         parks:
           type: string
         roads:
+          type: string
+        lrt:
           type: string
     ScoreRules:
       type: object
@@ -1209,6 +1389,10 @@ components:
           additionalProperties:
             type: number
             format: double
+        contextUrl:
+          type: string
+        mapLayerUrl:
+          type: string
     LayerManifest:
       type: object
       properties:
@@ -1257,6 +1441,8 @@ components:
         baselineScore:
           type: number
           format: double
+        dataProvenance:
+          $ref: "#/components/schemas/DistrictProvenance"
     DistrictMeasureResponse:
       type: object
       properties:
@@ -1295,3 +1481,19 @@ components:
           type: array
           items:
             type: string
+        contextUrl:
+          type: string
+        mapLayerUrl:
+          type: string
+  securitySchemes:
+    AnonymousBearer:
+      type: http
+      description: Старые анонимные токены только для истории. Для аккаунта используйте
+        JWT в BearerAuth.
+      scheme: bearer
+    BearerAuth:
+      type: http
+      description: Получите accessToken через /api/v1/auth/login или /register и вставьте
+        без префикса Bearer.
+      scheme: bearer
+      bearerFormat: JWT

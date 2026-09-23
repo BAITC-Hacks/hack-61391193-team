@@ -76,7 +76,8 @@ public class ScoreCalculator {
             BigDecimal oldScore = districtScore(oldMetrics);
             BigDecimal newScore = districtScore(newMetrics);
             districts.add(new DistrictResult(district.id(), district.name(), BigDecimal.valueOf(district.populationShare()),
-                    immutable(oldMetrics), immutable(newMetrics), immutable(deltas), oldScore, newScore, newScore.subtract(oldScore)));
+                    immutable(oldMetrics), immutable(newMetrics), immutable(deltas), oldScore, newScore,
+                    newScore.subtract(oldScore), district.dataProvenance()));
         }
         return new Calculation(summarize(districts, true), summarize(districts, false), List.copyOf(districts),
                 List.copyOf(effects), List.copyOf(synergies), selected.stream().mapToInt(s -> s.measure().cost()).sum());

@@ -28,9 +28,9 @@ class SimulationOptimizerTests {
 
         var result = optimizer.optimal();
 
-        // Also independently enumerated with integer arithmetic at a score scale of 800,000.
-        assertThat(result.evaluatedCandidates()).isEqualTo(694_395);
-        assertThat(result.calculation().summary().finalScore()).isEqualByComparingTo("57.236735");
+        // Independently enumerated with integer arithmetic at a score scale of 8,000,000,000.
+        assertThat(result.evaluatedCandidates()).isEqualTo(1_580_316);
+        assertThat(result.calculation().summary().finalScore()).isEqualByComparingTo("57.01147549");
         assertThat(result.calculation().spent()).isEqualTo(98);
         assertThat(result.request().decisions()).containsExactly(new Decision("M2", null), new Decision("M3", "nura"),
                 new Decision("M8", "nura"), new Decision("M9", "nura"), new Decision("M14", null));
@@ -51,6 +51,16 @@ class SimulationOptimizerTests {
             CatalogService catalog = catalogue(source.getMeasures().stream().filter(m -> ids.contains(m.id())).toList(), districts);
             assertMatchesOracle(catalog);
         }
+    }
+
+    @Test
+    void agreesWithIndependentTargetEnumerationAcrossAllSixDistricts() {
+        CatalogService source = new CatalogService();
+        List<String> measureIds = List.of("M1", "M2", "M3", "M8", "M9", "M14");
+        CatalogService subset = catalogue(source.getMeasures().stream().filter(m -> measureIds.contains(m.id())).toList(),
+                source.getDistricts());
+        assertThat(subset.getDistricts()).hasSize(6).extracting(DistrictResponse::id).contains("saraishyk");
+        assertMatchesOracle(subset);
     }
 
     @Test

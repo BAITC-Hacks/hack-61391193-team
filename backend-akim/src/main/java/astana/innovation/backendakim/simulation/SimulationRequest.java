@@ -14,13 +14,23 @@ public record SimulationRequest(
                     requiredMode = Schema.RequiredMode.REQUIRED, pattern = "^M([1-9]|1[0-4])$")
             String measureId,
             @Schema(description = "Обязателен для районных мер. Для городских отсутствует или null.",
-                    allowableValues = {"esil", "almaty", "saryarka", "baikonur", "nura"}, example = "nura")
+                    allowableValues = {"esil", "almaty", "saryarka", "baikonur", "nura", "saraishyk"}, example = "nura")
             String districtId) {
     }
 
     public static final String EXAMPLE_JSON = """
             {"decisions":[
               {"measureId":"M7","districtId":"nura"},
+              {"measureId":"M8","districtId":"nura"},
+              {"measureId":"M10","districtId":"nura"},
+              {"measureId":"M12"},
+              {"measureId":"M5","districtId":"saryarka"}
+            ]}
+            """;
+
+    public static final String SARAISHYK_EXAMPLE_JSON = """
+            {"decisions":[
+              {"measureId":"M7","districtId":"saraishyk"},
               {"measureId":"M8","districtId":"nura"},
               {"measureId":"M10","districtId":"nura"},
               {"measureId":"M12"},

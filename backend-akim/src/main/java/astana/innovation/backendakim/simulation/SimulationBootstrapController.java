@@ -1,5 +1,6 @@
 package astana.innovation.backendakim.simulation;
 
+import astana.innovation.backendakim.catalog.DistrictDataset;
 import java.util.List;
 import java.util.Map;
 import java.math.BigDecimal;
@@ -22,6 +23,7 @@ public class SimulationBootstrapController {
     public BootstrapResponse bootstrap() {
         return new BootstrapResponse(
                 "v1",
+                DistrictDataset.MODEL_VERSION,
                 SimulationRules.BUDGET,
                 SimulationRules.DECISIONS,
                 SimulationRules.HORIZON,
@@ -43,9 +45,12 @@ public class SimulationBootstrapController {
                         "/api/v1/map/district-stats",
                         "/api/v1/map/pois",
                         "/api/v1/map/parks",
-                        "/api/v1/map/roads"),
+                        "/api/v1/map/roads",
+                        "/api/v1/map/lrt"),
                 List.of(
                         "Score рассчитывается по синтетическому датасету хакатона.",
+                        "Модель включает 6 районов, в том числе Сарайшык; требуется выбрать ровно 5 мероприятий.",
+                        "Источники, синтетические показатели и допущения о весах населения указаны в dataProvenance каждого района.",
                         "Данные Overture используются как географический контекст и не являются официальной статистикой."),
                 new ScoreRules(SimulationRules.FORMULA, SimulationRules.METRIC_WEIGHTS,
                         SimulationRules.CRITICAL_THRESHOLD, SimulationRules.SYNERGIES, SimulationRules.CONFLICTS));
@@ -53,6 +58,7 @@ public class SimulationBootstrapController {
 
     public record BootstrapResponse(
             String apiVersion,
+            String modelVersion,
             int budgetLimit,
             int requiredDecisionCount,
             int horizonQuarters,
@@ -87,6 +93,7 @@ public class SimulationBootstrapController {
             String districtStats,
             String pois,
             String parks,
-            String roads) {
+            String roads,
+            String lrt) {
     }
 }

@@ -4,6 +4,8 @@ import lombok.Getter;
 import astana.innovation.backendakim.simulation.SimulationRules;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Collections;
@@ -20,27 +22,22 @@ public class CatalogService {
     private static final String CITY_SCOPE = "city";
 
     @Getter
-    private final List<DistrictResponse> districts = List.of(
-            district("esil", "Есиль", 0.27, 62.99,
-                    "T1", 45, "T2", 62, "E1", 68, "E2", 72, "S1", 48,
-                    "S2", 55, "B1", 78, "B2", 60, "C1", 75, "C2", 70),
-            district("almaty", "Алматы", 0.24, 57.06,
-                    "T1", 40, "T2", 75, "E1", 50, "E2", 55, "S1", 60,
-                    "S2", 65, "B1", 62, "B2", 52, "C1", 50, "C2", 60),
-            district("saryarka", "Сарыарка", 0.20, 54.65,
-                    "T1", 50, "T2", 70, "E1", 42, "E2", 40, "S1", 62,
-                    "S2", 68, "B1", 58, "B2", 55, "C1", 45, "C2", 55),
-            district("baikonur", "Байконур", 0.13, 56.63,
-                    "T1", 52, "T2", 68, "E1", 55, "E2", 50, "S1", 58,
-                    "S2", 60, "B1", 52, "B2", 58, "C1", 55, "C2", 58),
-            district("nura", "Нура", 0.16, 49.18,
-                    "T1", 55, "T2", 40, "E1", 45, "E2", 65, "S1", 38,
-                    "S2", 35, "B1", 55, "B2", 50, "C1", 60, "C2", 50)
-    );
+    private final List<DistrictResponse> districts;
 
-    private final List<String> districtIds = districts.stream()
-            .map(DistrictResponse::id)
-            .toList();
+    private final List<String> districtIds;
+
+    /** Standalone and pure calculation tests use the same versioned seed as PostgreSQL. */
+    public CatalogService() { this(DistrictDataset.load()); }
+
+    @Autowired
+    public CatalogService(ObjectProvider<DistrictRepository> repository) {
+        this(repository.getIfAvailable() == null ? DistrictDataset.load() : repository.getObject().findCurrent());
+    }
+
+    private CatalogService(List<DistrictResponse> districts) {
+        this.districts = districts;
+        this.districtIds = districts.stream().map(DistrictResponse::id).toList();
+    }
 
     @Getter
     private final List<MeasureResponse> measures = List.of(
@@ -107,22 +104,6 @@ public class CatalogService {
                 measure.realizedEffects(),
                 cityWide ? null : districtId,
                 cityWide ? districtIds : List.of(districtId)
-        );
-    }
-
-    private static DistrictResponse district(
-            String id,
-            String name,
-            double populationShare,
-            double baselineScore,
-            Object... metricEntries
-    ) {
-        return new DistrictResponse(
-                id,
-                name,
-                populationShare,
-                integerMap(metricEntries),
-                baselineScore
         );
     }
 

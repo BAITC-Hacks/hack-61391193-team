@@ -7,6 +7,11 @@ public record DistrictResponse(
         String name,
         double populationShare,
         Map<String, Integer> metrics,
-        double baselineScore
+        double baselineScore,
+        DistrictProvenance dataProvenance
 ) {
+    public DistrictResponse(String id, String name, double populationShare,
+                            Map<String, Integer> metrics, double baselineScore) {
+        this(id, name, populationShare, metrics, baselineScore, null);
+    }
 }

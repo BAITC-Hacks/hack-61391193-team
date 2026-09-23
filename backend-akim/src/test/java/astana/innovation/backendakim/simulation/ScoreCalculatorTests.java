@@ -36,25 +36,26 @@ class ScoreCalculatorTests {
     @Test
     void baselineMatchesIndependentlyCalculatedDataset() {
         var result = service.baseline();
-        assertThat(result.finalScore()).isEqualByComparingTo("52.55768");
-        assertThat(result.summary().dAvg()).isEqualByComparingTo("56.8624");
+        assertThat(result.modelVersion()).isEqualTo("v2-saraishyk");
+        assertThat(result.finalScore()).isEqualByComparingTo("52.33242049");
+        assertThat(result.summary().dAvg()).isEqualByComparingTo("56.5406007");
         assertThat(result.summary().dMin()).isEqualByComparingTo("49.18");
         assertThat(result.summary().nCrit()).isEqualTo(2);
         assertThat(result.summary().criticalMetrics()).extracting(SimulationResult.CriticalMetric::metric).containsExactly("S1", "S2");
         assertThat(result.districts()).extracting(d -> d.scoreBefore().stripTrailingZeros())
                 .containsExactly(new BigDecimal("62.99"), new BigDecimal("57.06"), new BigDecimal("54.65"),
-                        new BigDecimal("56.63"), new BigDecimal("49.18"));
+                        new BigDecimal("56.63"), new BigDecimal("49.18"), new BigDecimal("54.23"));
     }
 
     @Test
     void documentExampleMatchesHandCalculationIncludingSynergyAndLag() {
         var result = service.calculate(example());
-        assertThat(result.finalScore()).isEqualByComparingTo("56.54307");
-        assertThat(result.displayScore()).isEqualByComparingTo("56.54");
+        assertThat(result.finalScore()).isEqualByComparingTo("56.31781049");
+        assertThat(result.displayScore()).isEqualByComparingTo("56.32");
         assertThat(result.scoreDelta()).isEqualByComparingTo("3.98539");
         assertThat(result.budget().spent()).isEqualTo(95);
         assertThat(result.budget().remaining()).isEqualTo(5);
-        assertThat(result.summary().dAvg()).isEqualByComparingTo("58.0776");
+        assertThat(result.summary().dAvg()).isEqualByComparingTo("57.7558007");
         assertThat(result.summary().dMin()).isEqualByComparingTo("52.9625");
         assertThat(result.summary().nCrit()).isZero();
         assertThat(result.summary().weakestDistrictId()).isEqualTo("nura");
@@ -69,7 +70,7 @@ class ScoreCalculatorTests {
         result.districts().forEach(d -> assertThat(d.metricDeltas().get("C2")).isEqualByComparingTo("4.375"));
         assertThat(result.districts().get(2).scoreAfter()).isEqualByComparingTo("56.3");
         assertThat(result.explanation().source()).isEqualTo("template");
-        assertThat(result.explanation().summary()).contains("56.54", "+3.99", "95 из 100");
+        assertThat(result.explanation().summary()).contains("56.32", "+3.99", "95 из 100");
     }
 
     @Test
@@ -79,7 +80,7 @@ class ScoreCalculatorTests {
         Collections.reverse(reversed);
         assertThat(service.calculate(new SimulationRequest(reversed))).isEqualTo(expected);
         assertThat(service.calculate(example())).isEqualTo(expected);
-        assertThat(service.baseline().finalScore()).isEqualByComparingTo("52.55768");
+        assertThat(service.baseline().finalScore()).isEqualByComparingTo("52.33242049");
         assertThat(catalog.getDistrict("nura").metrics().get("S1")).isEqualTo(38);
     }
 
@@ -91,6 +92,32 @@ class ScoreCalculatorTests {
         assertThat(result.districts().getFirst().metricDeltas().get("T1")).isEqualByComparingTo("3");
         assertThat(result.synergies()).hasSize(1);
         assertThat(result.synergies().getFirst().districtId()).isEqualTo("nura");
+    }
+
+    @Test
+    void appliesLocalMeasuresToSaraishykAndCityMeasuresToAllSixDistricts() {
+        var selected = new ArrayList<>(example().decisions());
+        selected.set(0, new Decision("M7", "saraishyk"));
+        var result = service.calculate(new SimulationRequest(selected));
+
+        assertThat(result.districts()).hasSize(6);
+        assertThat(result.finalScore()).isEqualByComparingTo("54.95216719");
+        assertThat(result.scoreDelta()).isEqualByComparingTo("2.61974670");
+        assertThat(result.summary().dAvg()).isEqualByComparingTo("57.7048817");
+        assertThat(result.summary().dMin()).isEqualByComparingTo("51.8625");
+        assertThat(result.summary().nCrit()).isEqualTo(1);
+        var saraishyk = result.districts().stream().filter(d -> d.id().equals("saraishyk")).findFirst().orElseThrow();
+        assertThat(saraishyk.before().get("S1")).isEqualByComparingTo("48");
+        assertThat(saraishyk.after().get("S1")).isEqualByComparingTo("58");
+        assertThat(saraishyk.after().get("C2")).isEqualByComparingTo("64.375");
+        assertThat(saraishyk.scoreAfter()).isEqualByComparingTo("55.7675");
+        assertThat(saraishyk.dataProvenance()).isEqualTo(catalog.getDistrict("saraishyk").dataProvenance());
+        var school = result.measureEffects().stream().filter(m -> m.measureId().equals("M7")).findFirst().orElseThrow();
+        assertThat(school.affectedDistrictIds()).containsExactly("saraishyk");
+        var city = result.measureEffects().stream().filter(m -> m.measureId().equals("M12")).findFirst().orElseThrow();
+        assertThat(city.affectedDistrictIds()).containsExactly("esil", "almaty", "saryarka", "baikonur", "nura", "saraishyk");
+        assertThat(result.districts().stream().filter(d -> d.id().equals("nura")).findFirst().orElseThrow().after().get("S1"))
+                .isEqualByComparingTo("38");
     }
 
     @Test

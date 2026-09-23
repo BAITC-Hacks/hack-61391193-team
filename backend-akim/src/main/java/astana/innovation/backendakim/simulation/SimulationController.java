@@ -28,8 +28,11 @@ public class SimulationController {
                     + "При настроенном LLM передаёт оба рассчитанных результата для объяснения; иначе использует шаблон.",
             requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(required = true,
                     content = @Content(schema = @Schema(implementation = SimulationRequest.class),
-                            examples = @ExampleObject(name = "Пример из датасета: 95 единиц → 56.54307",
-                                    value = SimulationRequest.EXAMPLE_JSON))))
+                            examples = {
+                                    @ExampleObject(name = "Пример v2-saraishyk: 95 единиц → 56.31781049",
+                                            value = SimulationRequest.EXAMPLE_JSON),
+                                    @ExampleObject(name = "Школа в Сарайшыке: 95 единиц → 54.95216719",
+                                            value = SimulationRequest.SARAISHYK_EXAMPLE_JSON)})))
     @ApiResponse(responseCode = "200", description = "Результат и объяснение",
             content = @Content(schema = @Schema(implementation = SimulationResult.class)))
     @ApiResponse(responseCode = "422", description = "Невалидный набор: errors содержит коды и причины; Score не рассчитывается",
@@ -41,7 +44,7 @@ public class SimulationController {
     }
 
     @GetMapping("/baseline")
-    @Operation(summary = "Базовые показатели и Score без действий", description = "Score = 52.55768. Это справочный расчёт, не сценарий из 5 решений.")
+    @Operation(summary = "Базовые показатели и Score без действий", description = "Score модели v2-saraishyk = 52.33242049. Это справочный расчёт, не сценарий из 5 решений.")
     public SimulationResult baseline() { return simulation.baseline(); }
 
     public record ValidationProblem(String type, String title, int status, String detail, String instance,

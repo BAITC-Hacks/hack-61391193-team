@@ -27,17 +27,23 @@ class ApiContractIntegrationTests {
     private MockMvc mockMvc;
 
     @Test
-    void returnsFiveSimulationDistricts() throws Exception {
+    void returnsSixSimulationDistricts() throws Exception {
         mockMvc.perform(get("/api/v1/districts"))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$", hasSize(5)))
+                .andExpect(jsonPath("$", hasSize(6)))
                 .andExpect(jsonPath("$[*].id", contains(
-                        "esil", "almaty", "saryarka", "baikonur", "nura")))
+                        "esil", "almaty", "saryarka", "baikonur", "nura", "saraishyk")))
                 .andExpect(jsonPath("$[4].name").value("Нура"))
                 .andExpect(jsonPath("$[4].metrics", org.hamcrest.Matchers.aMapWithSize(10)))
                 .andExpect(jsonPath("$[4].metrics.S1").value(38))
-                .andExpect(jsonPath("$[4].baselineScore").value(closeTo(49.18, 0.001)));
+                .andExpect(jsonPath("$[4].baselineScore").value(closeTo(49.18, 0.001)))
+                .andExpect(jsonPath("$[5].name").value("Сарайшык"))
+                .andExpect(jsonPath("$[5].populationShare").value(closeTo(0.113710, 0.0000001)))
+                .andExpect(jsonPath("$[5].metrics", org.hamcrest.Matchers.aMapWithSize(10)))
+                .andExpect(jsonPath("$[5].baselineScore").value(closeTo(54.23, 0.001)))
+                .andExpect(jsonPath("$[5].dataProvenance.syntheticMetrics").value(true))
+                .andExpect(jsonPath("$[5].dataProvenance.modelVersion").value("v2-saraishyk"));
     }
 
     @Test
@@ -72,7 +78,7 @@ class ApiContractIntegrationTests {
                 .andExpect(jsonPath("$[0].affectedDistrictIds", contains("nura")))
                 .andExpect(jsonPath("$[1].targetDistrictId").value(nullValue()))
                 .andExpect(jsonPath("$[1].affectedDistrictIds", contains(
-                        "esil", "almaty", "saryarka", "baikonur", "nura")));
+                        "esil", "almaty", "saryarka", "baikonur", "nura", "saraishyk")));
     }
 
     @Test
@@ -92,17 +98,18 @@ class ApiContractIntegrationTests {
                 .andExpect(jsonPath("$.release").value("2026-08-19.0"))
                 .andExpect(jsonPath("$.attribution").value(
                         "© OpenStreetMap contributors, Overture Maps Foundation"))
-                .andExpect(jsonPath("$.layers", hasSize(6)))
+                .andExpect(jsonPath("$.layers", hasSize(7)))
                 .andExpect(jsonPath("$.layers[*].id", contains(
-                        "districts", "city-boundary", "district-stats", "pois", "parks", "roads")))
+                        "districts", "city-boundary", "district-stats", "pois", "parks", "roads", "lrt")))
                 .andExpect(jsonPath("$.layers[*].url", contains(
                         "/api/v1/map/districts",
                         "/api/v1/map/city-boundary",
                         "/api/v1/map/district-stats",
                         "/api/v1/map/pois",
                         "/api/v1/map/parks",
-                        "/api/v1/map/roads")))
-                .andExpect(jsonPath("$.layers[*].count", contains(5, 1, 5, 5317, 149, 3783)));
+                        "/api/v1/map/roads",
+                        "/api/v1/map/lrt")))
+                .andExpect(jsonPath("$.layers[*].count", contains(6, 1, 6, 5888, 181, 4591, 31)));
     }
 
     @Test
@@ -111,9 +118,9 @@ class ApiContractIntegrationTests {
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(GEO_JSON))
                 .andExpect(jsonPath("$.type").value("FeatureCollection"))
-                .andExpect(jsonPath("$.features", hasSize(5)))
+                .andExpect(jsonPath("$.features", hasSize(6)))
                 .andExpect(jsonPath("$.features[*].properties.district_id", containsInAnyOrder(
-                        "esil", "almaty", "saryarka", "baikonur", "nura")));
+                        "esil", "almaty", "saryarka", "baikonur", "nura", "saraishyk")));
     }
 
     @Test
@@ -121,9 +128,9 @@ class ApiContractIntegrationTests {
         mockMvc.perform(get("/api/v1/map/district-stats"))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$", hasSize(5)))
+                .andExpect(jsonPath("$", hasSize(6)))
                 .andExpect(jsonPath("$[*].district_id", contains(
-                        "esil", "almaty", "saryarka", "baikonur", "nura")))
+                        "esil", "almaty", "saryarka", "baikonur", "nura", "saraishyk")))
                 .andExpect(jsonPath("$[4].name_ru").value("Нура"))
                 .andExpect(jsonPath("$[4].school_count").value(50))
                 .andExpect(jsonPath("$[4].road_km_main").value(closeTo(189.4, 0.001)));
@@ -138,7 +145,8 @@ class ApiContractIntegrationTests {
                 .andExpect(jsonPath("$.requiredDecisionCount").value(5))
                 .andExpect(jsonPath("$.horizonQuarters").value(8))
                 .andExpect(jsonPath("$.maxMeasuresPerCategory").value(2))
-                .andExpect(jsonPath("$.baselineScore").value(closeTo(52.56, 0.001)))
+                .andExpect(jsonPath("$.baselineScore").value(closeTo(52.33, 0.001)))
+                .andExpect(jsonPath("$.modelVersion").value("v2-saraishyk"))
                 .andExpect(jsonPath("$.api.districts").value("/api/v1/districts"))
                 .andExpect(jsonPath("$.api.measures").value("/api/v1/measures"))
                 .andExpect(jsonPath("$.map.districts").value("/api/v1/map/districts"));
