@@ -11,6 +11,8 @@ services:
       - "${FRONTEND_PORT:-3000}:3000"
     environment:
       BACKEND_ORIGIN: http://backend-akim:8080
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      SIMULATION_LLM_MODEL: ${SIMULATION_LLM_MODEL:-gpt-4.1-mini-2025-04-14}
     depends_on:
       backend-akim:
         condition: service_healthy

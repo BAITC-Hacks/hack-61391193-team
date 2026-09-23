@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import InitiativeModal, { type InitiativeSelection } from "./initiative-modal";
+import ChatPanel from "./chat-panel";
 import styles from "./district-map.module.css";
 import { ResultsOverlay, ScenarioHud, decisionFromInitiative, selectedDecisions } from "./scenario-ui";
 import type { ExpressionSpecification } from "maplibre-gl";
@@ -14,16 +15,9 @@ import {
 } from "./api";
 
 type Map = import("maplibre-gl").Map;
-type AdministrativeDistricts = FeatureCollection<Polygon | MultiPolygon, {
-  objectid: number; name_object: string; name_object_kaz: string;
-}>;
 type Selected = { id: string | null; name: string };
 type LayerKey = "city" | "parks" | "roads" | "pois";
 
-const districtIds: Record<string, string> = {
-  "Есиль": "esil", "Алматы": "almaty", "Сарыарка": "saryarka",
-  "Байконур": "baikonur", "Нура": "nura",
-};
 const poiKinds: Record<string, string> = {
   school: "Школы", kindergarten: "Детсады", hospital: "Больницы",
   clinic: "Поликлиники", bus_stop: "Остановки", traffic_signals: "Светофоры",
@@ -62,8 +56,6 @@ export default function DistrictMap() {
   const selectedFeature = useRef<{ source: string; id: string | number } | null>(null);
   const hoveredFeature = useRef<{ source: string; id: string | number } | null>(null);
   const boundsRef = useRef<[[number, number], [number, number]] | null>(null);
-  const adminBounds = useRef<[[number, number], [number, number]] | null>(null);
-  const modelBounds = useRef<[[number, number], [number, number]] | null>(null);
   const loadedLayers = useRef(new Set<LayerKey>());
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
@@ -82,7 +74,6 @@ export default function DistrictMap() {
   const [districtDetail, setDistrictDetail] = useState<District | null>(null);
   const [districtMeasures, setDistrictMeasures] = useState<DistrictMeasure[]>([]);
   const [initiativeDialog, setInitiativeDialog] = useState<{ districtId: string; districtName: string } | null>(null);
-  const [boundaryMode, setBoundaryMode] = useState<"administrative" | "model">("administrative");
   const [visibleLayers, setVisibleLayers] = useState<Record<LayerKey, boolean>>({ city: false, parks: false, roads: false, pois: false });
   const [layerLoading, setLayerLoading] = useState<LayerKey | null>(null);
   const [poiKind, setPoiKind] = useState("school");
@@ -187,7 +178,7 @@ export default function DistrictMap() {
     const popup = popupRef.current;
     const container = mapContainer.current;
     const click = selectionPoint;
-    const occupiedElements = [...document.querySelectorAll<HTMLElement>(".map-brand, .score-hud, .budget-hud, .turns-hud, .turn-counter, .map-tools, .maplibregl-ctrl-top-right")];
+    const occupiedElements = [...document.querySelectorAll<HTMLElement>(".map-brand, .score-hud, .budget-hud, .turns-hud, .turn-counter, .map-tools, .maplibregl-ctrl-top-right, [data-chat-panel]")];
     function positionPopup() {
       if (window.innerWidth <= 760) return;
       const width = container.clientWidth;
@@ -231,7 +222,6 @@ export default function DistrictMap() {
     if (!mapContainer.current) return;
     let disposed = false;
     let map: Map | null = null;
-    const controller = new AbortController();
     function fitDistricts() {
       if (!map || !boundsRef.current || !mapContainer.current) return;
       const width = mapContainer.current.clientWidth;
@@ -260,42 +250,18 @@ export default function DistrictMap() {
       });
       mapRef.current = map;
       map.addControl(new maplibregl.NavigationControl(), "top-right");
-      map.on("load", async () => {
-        try {
-          const data = await apiGet<AdministrativeDistricts>("/data/astana-districts.geojson", controller.signal);
-          if (disposed || !map) return;
-          map.addSource("administrative", { type: "geojson", data, promoteId: "objectid" });
-          map.addLayer({ id: "administrative-fill", type: "fill", source: "administrative",
-            paint: { "fill-color": ["case", ["boolean", ["feature-state", "selected"], false], "#ea7b32", "#3479a5"], "fill-opacity": ["case", ["boolean", ["feature-state", "selected"], false], 0.68, ["boolean", ["feature-state", "hover"], false], 0.54, 0.34] } });
-          map.addLayer({ id: "administrative-outline", type: "line", source: "administrative",
-            paint: { "line-color": ["case", ["boolean", ["feature-state", "selected"], false], "#d85b22", ["boolean", ["feature-state", "hover"], false], "#155c78", "#173f5a"],
-              "line-width": ["case", ["boolean", ["feature-state", "selected"], false], 4, ["boolean", ["feature-state", "hover"], false], 3, 2.2] } });
-          adminBounds.current = getBounds(data);
-          boundsRef.current = adminBounds.current;
-          fitDistricts();
-          map.on("click", "administrative-fill", (event) => {
-            const properties = event.features?.[0]?.properties;
-            if (typeof properties?.objectid === "number" && typeof properties.name_object === "string") {
-              chooseFeature("administrative", properties.objectid, properties.name_object, districtIds[properties.name_object] ?? null, event.point);
-            }
-          });
-          map.on("mouseenter", "administrative-fill", () => { if (map) map.getCanvas().style.cursor = "pointer"; });
-          map.on("mousemove", "administrative-fill", (event) => hoverFeature("administrative", (event.features?.[0]?.id as string | number | undefined) ?? null));
-          map.on("mouseleave", "administrative-fill", () => { if (map) map.getCanvas().style.cursor = ""; hoverFeature("administrative", null); });
-          map.on("click", (event) => {
-            if (!map?.queryRenderedFeatures(event.point, { layers: ["administrative-fill", "model-fill"].filter((layer) => map?.getLayer(layer)) }).length) clearSelection();
-          });
-          setMapReady(true);
-        } catch (error) {
-          console.error("Failed to load map boundaries", error);
-          if (!disposed) setMapError("Не удалось загрузить карту");
-        }
+      map.on("load", () => {
+        if (disposed || !map) return;
+        map.on("click", (event) => {
+          if (map?.getLayer("model-fill") && !map.queryRenderedFeatures(event.point, { layers: ["model-fill"] }).length) clearSelection();
+        });
+        setMapReady(true);
       });
     }
     void initialize().catch(() => { if (!disposed) setMapError("Не удалось открыть карту"); });
     const layersLoaded = loadedLayers.current;
     return () => {
-      disposed = true; controller.abort(); observer.disconnect(); window.removeEventListener("resize", resizeMap);
+      disposed = true; observer.disconnect(); window.removeEventListener("resize", resizeMap);
       map?.remove(); mapRef.current = null; layersLoaded.clear();
     };
   }, []);
@@ -304,12 +270,18 @@ export default function DistrictMap() {
     const map = mapRef.current;
     if (!mapReady || !map || !modelGeojson || map.getSource("model")) return;
     map.addSource("model", { type: "geojson", data: modelGeojson, promoteId: "district_id", attribution: manifest?.attribution });
-    map.addLayer({ id: "model-fill", type: "fill", source: "model", layout: { visibility: "none" },
+    map.addLayer({ id: "model-fill", type: "fill", source: "model",
       paint: { "fill-color": ["case", ["boolean", ["feature-state", "selected"], false], "#ea7b32", "#3479a5"], "fill-opacity": ["case", ["boolean", ["feature-state", "selected"], false], 0.68, ["boolean", ["feature-state", "hover"], false], 0.54, 0.34] } });
-    map.addLayer({ id: "model-outline", type: "line", source: "model", layout: { visibility: "none" },
+    map.addLayer({ id: "model-outline", type: "line", source: "model",
       paint: { "line-color": ["case", ["boolean", ["feature-state", "selected"], false], "#d85b22", ["boolean", ["feature-state", "hover"], false], "#155c78", "#173f5a"],
         "line-width": ["case", ["boolean", ["feature-state", "selected"], false], 4, ["boolean", ["feature-state", "hover"], false], 3, 2.2] } });
-    modelBounds.current = getBounds(modelGeojson);
+    boundsRef.current = getBounds(modelGeojson);
+    map.fitBounds(boundsRef.current, {
+      padding: mapContainer.current && mapContainer.current.clientWidth <= 760
+        ? { top: 110, right: 22, bottom: Math.min(mapContainer.current.clientHeight * 0.28, 180), left: 22 }
+        : { top: 95, right: 56, bottom: 140, left: 56 },
+      maxZoom: 11, duration: 0,
+    });
     map.on("click", "model-fill", (event) => {
       const properties = event.features?.[0]?.properties;
       if (typeof properties?.district_id === "string" && typeof properties.name_ru === "string") {
@@ -333,12 +305,7 @@ export default function DistrictMap() {
   useEffect(() => {
     const map = mapRef.current;
     if (!mapReady || !map) return;
-    const byName = result?.districts.flatMap((district) => [district.name, scoreColor(district.scoreAfter)]) ?? [];
     const byId = result?.districts.flatMap((district) => [district.id, scoreColor(district.scoreAfter)]) ?? [];
-    map.setPaintProperty("administrative-fill", "fill-color", [
-      "case", ["boolean", ["feature-state", "selected"], false], "#ea7b32",
-      result ? (["match", ["get", "name_object"], ...byName, "#3479a5"] as unknown as ExpressionSpecification) : "#3479a5",
-    ]);
     if (map.getLayer("model-fill")) {
       map.setPaintProperty("model-fill", "fill-color", [
         "case", ["boolean", ["feature-state", "selected"], false], "#ea7b32",
@@ -346,24 +313,6 @@ export default function DistrictMap() {
       ]);
     }
   }, [mapReady, result, modelGeojson]);
-
-  function changeBoundaryMode(next: "administrative" | "model") {
-    const map = mapRef.current;
-    if (!map || (next === "model" && !modelBounds.current)) return;
-    clearSelection();
-    hoverFeature(boundaryMode === "model" ? "model" : "administrative", null);
-    setBoundaryMode(next);
-    for (const layer of ["administrative-fill", "administrative-outline"]) map.setLayoutProperty(layer, "visibility", next === "administrative" ? "visible" : "none");
-    for (const layer of ["model-fill", "model-outline"]) map.setLayoutProperty(layer, "visibility", next === "model" ? "visible" : "none");
-    boundsRef.current = next === "model" ? modelBounds.current : adminBounds.current;
-    const size = mapContainer.current;
-    if (size && boundsRef.current) map.fitBounds(boundsRef.current, {
-      padding: size.clientWidth <= 760
-        ? { top: 110, right: 22, bottom: Math.min(size.clientHeight * 0.28, 180), left: 22 }
-        : { top: 95, right: 56, bottom: 140, left: 56 },
-      maxZoom: 11, duration: 0,
-    });
-  }
 
   async function toggleLayer(layer: LayerKey) {
     const map = mapRef.current;
@@ -419,6 +368,7 @@ export default function DistrictMap() {
     calculationId.current += 1;
     setDecisions((current) => [...current, decision]);
     setResult(null); setCalculationError([]); setCalculating(false);
+    if (decisions.length + 1 === (bootstrap?.requiredDecisionCount ?? 5)) clearSelection();
   }
 
   async function calculate() {
@@ -441,6 +391,14 @@ export default function DistrictMap() {
   const selectedStats = stats.find((item) => item.district_id === selected?.id);
   const selectedResult = (result ?? baseline)?.districts.find((item) => item.id === selected?.id);
   const selections = selectedDecisions(decisions, measures, districts);
+  const chatContext = JSON.stringify({
+    city: "Астана",
+    selectedDistrict: selected?.name ?? null,
+    districtStats: selectedStats ? { areaKm2: selectedStats.area_km2, schoolCount: selectedStats.school_count, greenSharePercent: selectedStats.green_share_pct } : null,
+    decisions: selections.map(({ measure, district }) => ({ name: measure?.name, district, cost: measure?.cost })),
+    budget: { limit: bootstrap?.budgetLimit ?? 100, spent: selections.reduce((sum, item) => sum + (item.measure?.cost ?? 0), 0) },
+    result: result ? { score: result.displayScore, scoreDelta: result.scoreDelta, explanation: result.explanation?.summary } : null,
+  });
 
   function removeDecision(measureId: string) {
     calculationId.current += 1;
@@ -466,9 +424,6 @@ export default function DistrictMap() {
         <details>
           <summary>Слои карты</summary>
           <div className="tool-content">
-            <p className="tool-label">Границы</p>
-            <label><input type="radio" checked={boundaryMode === "administrative"} onChange={() => changeBoundaryMode("administrative")} /> 6 административных</label>
-            <label><input type="radio" checked={boundaryMode === "model"} disabled={!modelGeojson} onChange={() => changeBoundaryMode("model")} /> 5 районов модели</label>
             <p className="tool-label">Данные Overture</p>
             {(["city", "parks", "roads", "pois"] as LayerKey[]).map((layer) => (
               <label key={layer}><input type="checkbox" checked={visibleLayers[layer]} disabled={!bootstrap || layerLoading === layer || (layer === "city" && !cityGeojson)} onChange={() => void toggleLayer(layer)} /> {{ city: "Граница города", parks: "Парки", roads: "Дороги и ЛРТ", pois: "Инфраструктура" }[layer]}{layerLoading === layer ? " · загрузка" : ""}{manifest ? ` · ${manifest.layers.find((item) => item.id === (layer === "city" ? "city-boundary" : layer))?.count ?? ""}` : ""}</label>
@@ -510,6 +465,7 @@ export default function DistrictMap() {
         </> : <p className={styles.unavailable}>Этот район показан на административной карте, но не входит в симулятор.</p>}
       </aside>}
       <ScenarioHud selections={selections} requiredCount={bootstrap?.requiredDecisionCount ?? 5} budgetLimit={bootstrap?.budgetLimit ?? 100} calculating={calculating} ready={!!bootstrap} errors={calculationError} onRemove={removeDecision} onCalculate={() => void calculate()} />
+      <ChatPanel context={chatContext} />
       {result && showResults && <ResultsOverlay result={result} selections={selections} bootstrap={bootstrap} onViewDistricts={() => setShowResults(false)} onNewScenario={newScenario} />}
     </main>
   );
