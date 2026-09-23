@@ -6,7 +6,7 @@ import styles from "./measure-preview.module.css";
 
 type Props = { measureId: MeasureId; variant?: "default" | "card" };
 
-/** Static diorama. Only visible previews own a WebGL context. */
+/** Small diorama. Only visible previews own a WebGL context. */
 export default function MeasurePreview({ measureId, variant = "default" }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(() => typeof IntersectionObserver === "undefined");
@@ -39,6 +39,7 @@ export default function MeasurePreview({ measureId, variant = "default" }: Props
 
       let model: import("three").Group | undefined;
       let observer: ResizeObserver | undefined;
+      let animationFrame: number | null = null;
       try {
         renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
         renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -66,10 +67,20 @@ export default function MeasurePreview({ measureId, variant = "default" }: Props
         observer = new ResizeObserver(render);
         observer.observe(element);
         render();
+        if ((measureId === "M15" || measureId === "M16") && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+          const animate = (time: number) => {
+            if (!model) return;
+            factory.animateMeasureScene(model, measureId, time);
+            renderer.render(scene, camera);
+            animationFrame = window.requestAnimationFrame(animate);
+          };
+          animationFrame = window.requestAnimationFrame(animate);
+        }
       } catch {
         setFailed(true);
       }
       cleanup = () => {
+        if (animationFrame !== null) window.cancelAnimationFrame(animationFrame);
         observer?.disconnect();
         if (model) factory.disposeMeasureScene(model);
         renderer.dispose();
