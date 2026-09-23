@@ -8,18 +8,21 @@ Backend принимает пять выбранных мероприятий, �
 
 - [Общие правила API](#общие-правила-api)
 - [Все эндпоинты](#все-эндпоинты)
+- [Регистрация и авторизация](#регистрация-и-авторизация)
 - [Районы и показатели](#районы-и-показатели)
 - [Мероприятия](#мероприятия)
 - [Начальные настройки симуляции](#начальные-настройки-симуляции)
 - [Расчёт сценария](#расчёт-сценария)
 - [Все поля результата](#все-поля-результата)
 - [Базовое состояние](#базовое-состояние)
+- [Сохранение и история](#сохранение-и-история)
 - [Формула и ограничения](#формула-и-ограничения)
 - [Ошибки](#ошибки)
 - [Карта и геоданные](#карта-и-геоданные)
 - [Swagger и OpenAPI](#swagger-и-openapi)
 - [Как frontend использует API](#как-frontend-использует-api)
 - [Как устроен код](#как-устроен-код)
+- [PostgreSQL и Docker Desktop](#postgresql-и-docker-desktop)
 - [Настройки и расположение данных](#настройки-и-расположение-данных)
 
 ## Общие правила API
@@ -33,13 +36,13 @@ Backend принимает пять выбранных мероприятий, �
 | Формат обычного ответа | JSON, `Content-Type: application/json` |
 | Формат геометрии | GeoJSON, `Content-Type: application/geo+json` |
 | Формат ошибок приложения | Problem Details, `Content-Type: application/problem+json` |
-| Тело POST | JSON с заголовком `Content-Type: application/json` |
-| Параметры GET | У перечисленных GET нет тела и прикладных query-параметров; два маршрута используют `{id}` в пути |
-| Авторизация | В текущем backend не реализована; токен для этих маршрутов не требуется |
-| Пагинация и фильтры | Не реализованы; списки и географические слои возвращаются целиком |
-| Сохранение сценариев | Не реализовано; POST возвращает результат без записи в БД |
+| Тело POST | JSON с заголовком `Content-Type: application/json`; создание анонимного профиля — без тела |
+| Параметры GET | Без тела; у истории есть `limit` и `offset`, у отдельных ресурсов — `{id}` в пути |
+| Авторизация | JWT в `Authorization: Bearer <accessToken>` для `/api/v1/auth/me`, `/api/v1/admin/**` и истории; старый анонимный токен подходит только для истории. Регистрация, вход, расчёт, справочники и карта открыты |
+| Пагинация и фильтры | История: `limit=20` (1–100), `offset=0` (≥0); владелец определяется по токену. Справочники и слои карты возвращаются целиком |
+| Сохранение сценариев | `POST /api/v1/simulations` рассчитывает и сохраняет снимок в PostgreSQL; `/simulation/calculate` только рассчитывает |
 | Повторный расчёт | Каждый запрос начинает с исходного датасета; эффекты прошлых запросов не накапливаются |
-| LLM | Внешний LLM не вызывается; объяснение создаётся по шаблону из результата расчёта |
+| LLM | При настройке API объясняет результат пользователя и лучший набор; без подключения используется шаблон |
 
 В таблицах ниже `number` — JSON-число, `integer` — целое JSON-число, `object<код, number>` — объект с кодами в качестве ключей. Например, `{"T1": 4.5, "T2": 6.75}`.
 
@@ -60,6 +63,14 @@ Backend принимает пять выбранных мероприятий, �
 | POST | `/api/simulation/calculate` | Полный аналог предыдущего маршрута |
 | GET | `/api/v1/simulation/baseline` | Полный результат модели без мероприятий |
 | GET | `/api/simulation/baseline` | Полный аналог предыдущего маршрута |
+| POST | `/api/v1/auth/register` | Регистрирует пользователя по email, password, username; возвращает JWT и профиль |
+| POST | `/api/v1/auth/login` | Вход по email и password; возвращает новый JWT и профиль |
+| GET | `/api/v1/auth/me` | Данные зарегистрированного пользователя по JWT |
+| GET | `/api/v1/admin/me` | Данные администратора; требует JWT аккаунта с ролью ADMIN |
+| POST | `/api/v1/users/anonymous` | Совместимость: создаёт анонимный профиль, один раз выдаёт секретный токен доступа к его истории |
+| POST | `/api/v1/simulations` | Рассчитывает и сохраняет пять решений и полный результат; возвращает `201` после транзакции |
+| GET | `/api/v1/simulations` | История текущего профиля: краткие результаты с пагинацией, сначала новые |
+| GET | `/api/v1/simulations/{id}` | Полный сохранённый сценарий текущего профиля по UUID |
 | GET | `/api/v1/map/layers` | Описание шести файлов карты: URL, размер, число объектов и формат |
 | GET | `/api/v1/map/districts` | GeoJSON границ пяти районов |
 | GET | `/api/v1/map/city-boundary` | GeoJSON границы Астаны |
@@ -77,7 +88,135 @@ Backend принимает пять выбранных мероприятий, �
 | GET | `/v3/api-docs` | OpenAPI-схема в JSON |
 | GET | `/v3/api-docs.yaml` | OpenAPI-схема в YAML |
 
+### Состояние приложения и БД
+
+| Метод | Путь | Назначение |
+|---|---|---|
+| GET | `/actuator/health` | Общее состояние приложения и его компонентов |
+| GET | `/actuator/health/db` | Проверка соединения с PostgreSQL; компонент доступен при включённом профиле `postgres` |
+
+Успех проверки БД: HTTP `200`, `{"status":"UP"}`. Неуспешная проверка БД: HTTP `503`, `{"status":"DOWN"}`. Это ответы Actuator, без формата Problem Details. Подробности соединения и пароли не раскрываются. Если приложение не запустилось, HTTP-ответа от него не будет.
+
+Actuator не входит в сохранённую OpenAPI-схему прикладных маршрутов `/api/**`.
+
 `OPTIONS /api/**` используется браузером для CORS preflight и обрабатывается Spring MVC. Отдельной бизнес-операции для него нет. Swagger также загружает свои служебные ресурсы, включая конфигурацию `/v3/api-docs/swagger-config`.
+
+## Регистрация и авторизация
+
+Аккаунты и BCrypt-хеши паролей хранятся в PostgreSQL. Для этих маршрутов нужен профиль `postgres`; Compose включает его автоматически. Без БД корректные запросы возвращают `503`. Расчёт симуляции, справочники, карта, Swagger и health остаются публичными. Cookie и серверные сессии для входа не используются.
+
+### POST /api/v1/auth/register
+
+Создаёт аккаунт с ролью `USER`. Авторизация не нужна. Обязательное тело JSON:
+
+```json
+{
+  "email": "user@example.com",
+  "password": "UserPass123!",
+  "username": "user"
+}
+```
+
+| Поле | Тип | Правила |
+|---|---|---|
+| `email` | string | Непустой корректный email, максимум 254 символа. Пробелы по краям удаляются, регистр приводится к нижнему. Адрес уникален |
+| `password` | string | От 8 до 72 символов и не больше 72 байт UTF-8. Пробелы не удаляются; пароль хранится только как BCrypt-хеш |
+| `username` | string | От 3 до 50 символов после удаления пробелов по краям; отображаемое имя, для входа используется email |
+
+Ограничение пароля в байтах учитывает BCrypt: кириллица и некоторые другие символы занимают больше одного байта. Поля `role`, `id` и владелец истории назначаются сервером. Передать роль администратора через регистрацию нельзя.
+
+Ответ `201 Created`, объект `AuthResponse`:
+
+```json
+{
+  "accessToken": "<JWT>",
+  "tokenType": "Bearer",
+  "expiresIn": 3600,
+  "user": {
+    "id": "11111111-1111-4111-8111-111111111111",
+    "email": "user@example.com",
+    "username": "user",
+    "role": "USER",
+    "createdAt": "2026-09-23T10:00:00Z"
+  }
+}
+```
+
+| Поле ответа | Тип | Назначение |
+|---|---|---|
+| `accessToken` | string | Подписанный JWT для следующих авторизованных запросов |
+| `tokenType` | string | Всегда `Bearer` |
+| `expiresIn` | integer | Время действия нового токена в секундах, по умолчанию 3600 |
+| `user.id` | string, UUID | Постоянный ID аккаунта, к которому привязана история |
+| `user.email` | string | Нормализованный email |
+| `user.username` | string | Отображаемое имя |
+| `user.role` | string | `USER` или `ADMIN`; при регистрации всегда `USER` |
+| `user.createdAt` | string, date-time | Время создания аккаунта, UTC |
+
+Повторная регистрация email, включая адрес администратора, возвращает `409 Conflict`. Невалидные поля или JSON — `400`. Ответы ошибок не содержат переданный пароль и его хеш.
+
+### POST /api/v1/auth/login
+
+Авторизация не нужна. Обязательное тело JSON содержит только реквизиты входа:
+
+```json
+{"email":"admin@example.com","password":"Admin"}
+```
+
+Email нормализуется так же, как при регистрации. Пароль проверяется без удаления пробелов и с учётом регистра. Ответ `200 OK` имеет тот же `AuthResponse`, что и регистрация. Неверный пароль и неизвестный email возвращают одинаковую ошибку `401`; ответ не сообщает, существует ли такой аккаунт. Для заданного локального администратора пароль `Admin` допустим при входе; минимум 8 символов применяется к регистрации новых пользователей.
+
+Каждый вход выдаёт новый JWT того же аккаунта. Новый токен не удаляет историю и не отзывает ранее выданные токены: они действуют до своего срока окончания.
+
+### GET /api/v1/auth/me
+
+Тела нет. Передайте `Authorization: Bearer <JWT>`. Ответ `200` — объект `user` из примера выше, без внешней обёртки и без нового токена. Данные пользователя и его роль берутся из БД. Старый анонимный токен не заменяет вход в аккаунт: действующий анонимный профиль получает здесь `403`.
+
+### GET /api/v1/admin/me
+
+Тела нет. Требует JWT аккаунта с текущей ролью `ADMIN` в БД. Ответ `200` — профиль администратора в том же формате. Зарегистрированный пользователь с ролью `USER` получает `403 Forbidden`; без действующего токена — `401`.
+
+Это защищённый маршрут backend для проверки прав администратора. Отдельного HTML-интерфейса админки этот маршрут не создаёт. Роль администратора не открывает чужую историю: `/simulations` по-прежнему возвращает только сценарии владельца токена.
+
+### JWT и жизненный цикл входа
+
+После регистрации или входа передавайте заголовок:
+
+```http
+Authorization: Bearer <accessToken>
+```
+
+В Swagger нажмите **Authorize**, выберите **BearerAuth** и вставьте токен без слова `Bearer`. Для проверки можно выполнить вход администратора с примером выше, затем `/api/v1/auth/me` и `/api/v1/admin/me`.
+
+JWT подписывается HMAC SHA-256 (`HS256`). Сервер проверяет подпись, срок `exp`, издателя `iss` (по умолчанию `akim-backend`) и аудиторию `aud` (`akim-api`), затем находит аккаунт в БД. Истёкший, подделанный, некорректный токен или токен отсутствующего аккаунта возвращает `401` с `WWW-Authenticate: Bearer`. JWT не содержит пароль или его хеш. Действующую роль сервер проверяет по БД.
+
+При `401` покажите форму входа и получите новый токен. Refresh-токены, серверный logout/отзыв JWT, подтверждение email, восстановление и смена пароля пока не реализованы. Выход на frontend означает удаление токена на клиенте; уже выданный токен продолжает действовать до `exp`.
+
+### Администратор и настройки JWT
+
+При старте с профилем `postgres` создаётся отсутствующий администратор:
+
+| Параметр | Локальное значение |
+|---|---|
+| `ADMIN_EMAIL` | `admin@example.com` |
+| `ADMIN_PASSWORD` | `Admin` |
+| `ADMIN_USERNAME` | `admin` |
+| Роль | `ADMIN` |
+
+Начальные реквизиты применяются только при создании. Перезапуск или изменение `ADMIN_PASSWORD` в `.env` не сбрасывает пароль существующего аккаунта. Зарезервированный адрес администратора нельзя занять через публичную регистрацию.
+
+`JWT_SECRET` обязателен для профиля `postgres`: Base64 от минимум 32 случайных байт. `.env.example` содержит готовое значение для локальной проверки. В существующий `.env` добавьте этот параметр; для размещения сгенерируйте собственный секрет и измените начальный пароль администратора. Сохраните один секрет между перезапусками и экземплярами backend: смена секрета делает ранее выданные JWT недействительными, но не удаляет аккаунты и историю. `JWT_TTL_SECONDS` задаёт время действия, по умолчанию 3600 секунд.
+
+### Ошибки регистрации и входа
+
+| HTTP | Причина |
+|---|---|
+| `400` | Невалидный JSON, отсутствующие или недопустимые поля |
+| `401` | Неверные реквизиты входа либо нет действующего JWT для защищённого маршрута |
+| `403` | Нет роли ADMIN для административного маршрута либо анонимный профиль пытается открыть /auth/me |
+| `409` | Email уже зарегистрирован или зарезервирован для администратора |
+| `503` | Профиль postgres выключен или хранилище недоступно |
+
+Ошибки возвращаются в формате `application/problem+json`. Успешные ответы с токенами и профилями не кешируются.
 
 ## Районы и показатели
 
@@ -579,6 +718,226 @@ Frontend передаёт только выбор мероприятий и ра
 
 Не путайте три одноимённых поля: `DistrictResponse.baselineScore` — балл одного района; `BootstrapResponse.baselineScore` — округлённый городской Score; `SimulationResult.baselineScore` — точный городской Score.
 
+## Сохранение и история
+
+Операции сохранения и истории работают с PostgreSQL. Compose включает нужный профиль `postgres`; без него операции видны в Swagger, но возвращают `503`. Для нового аккаунта получите JWT через `/auth/register` или `/auth/login`. Предварительный расчёт `/api/v1/simulation/calculate` остаётся доступен без БД и ничего не сохраняет.
+
+Последовательность сохранения:
+
+```text
+Authorization → профиль пользователя
+5 выбранных решений → Validator → ScoreCalculator → Optimizer → сравнение → LLM/шаблон
+→ полный SimulationResult
+→ INSERT в PostgreSQL → COMMIT → HTTP 201 с сохранённым результатом
+```
+
+`result.bestSolution` содержит глобально лучший допустимый набор, а `result.comparison` — разницу Score и признак оптимальности выбора пользователя. При настройке `SIMULATION_LLM_URL` и `SIMULATION_LLM_MODEL` сервер отправляет оба результата LLM, и `result.explanation.source` становится `llm`; при отсутствии подключения или сбое используется `template`. Полученное объяснение сохраняется вместе с числами и не генерируется заново при чтении истории. Старые снимки читаются с `bestSolution = null`, `comparison = null`.
+
+Проверка пользователя выполняется до расчёта. Поиск и ожидание LLM проходят без открытой транзакции БД; короткая транзакция охватывает только сохранение готового снимка.
+
+Невалидные сценарии возвращают `422` и не создают запись. Ошибка хранилища возвращает `503`, успешный ответ до завершения транзакции не отправляется. После обрыва соединения ответ может потеряться уже после фиксации транзакции: перед повторной отправкой следует проверить историю. Защиты от повторных POST пока нет — каждый успешный запрос создаёт новый сценарий.
+
+### POST /api/v1/users/anonymous — совместимость
+
+Старый маршрут создаёт профиль без регистрации и сохранён для совместимости. Для новой интеграции используйте [регистрацию и вход](#регистрация-и-авторизация). Тела и авторизации не требует. Ответ: `201 Created`, `Cache-Control: no-store`.
+
+| Поле ответа | Тип | Назначение |
+|---|---|---|
+| `userId` | string, UUID | Постоянный идентификатор профиля |
+| `accessToken` | string | Случайный секрет из 32 байт в Base64URL, 43 символа; доступ ко всей истории профиля |
+| `tokenType` | string | Всегда `Bearer` |
+| `createdAt` | string, date-time | Момент создания профиля, UTC |
+
+Токен возвращается только при создании. База хранит SHA-256 от токена, поэтому сервер не может выдать исходный токен повторно. Сам `userId` не даёт доступа и не принимается как средство авторизации.
+
+У анонимного профиля своя отдельная история и бессрочный токен. Вход по email относится к зарегистрированным аккаунтам; перенос прежней анонимной истории в аккаунт пока не реализован. Существующие анонимные токены и записи сохраняются после миграции БД. Создание нового профиля даёт пустую историю; восстановления потерянного анонимного токена и его отзыва пока нет.
+
+Для трёх операций со сценариями передавайте JWT аккаунта или прежний анонимный токен в одинаковом заголовке:
+
+```http
+Authorization: Bearer <accessToken>
+```
+
+В Swagger нажмите **Authorize**: для JWT используйте **BearerAuth**, для старого анонимного токена — **AnonymousBearer**. Авторизуйте только нужную схему, вставляя значение `accessToken` без префикса. Отсутствующий, неверно оформленный и неизвестный токен дают `401` с `WWW-Authenticate: Bearer`. Анонимный токен не открывает `/auth/me` и `/admin/me`.
+
+### POST /api/v1/simulations
+
+Принимает тот же `SimulationRequest`, что и `/calculate`:
+
+```json
+{
+  "decisions": [
+    {"measureId": "M7", "districtId": "nura"},
+    {"measureId": "M8", "districtId": "nura"},
+    {"measureId": "M10", "districtId": "nura"},
+    {"measureId": "M12"},
+    {"measureId": "M5", "districtId": "saryarka"}
+  ]
+}
+```
+
+Проверяет все ограничения текущей модели и возвращает `201 Created` с объектом `SavedSimulationResponse`. `Location: /api/v1/simulations/{id}` указывает маршрут чтения. Ответ не кешируется (`Cache-Control: no-store`). CORS разрешает frontend читать заголовок `Location`.
+
+| Поле ответа | Тип | Что хранится |
+|---|---|---|
+| `id` | string, UUID | Идентификатор сохранённого сценария |
+| `userId` | string, UUID | Профиль, определённый по токену |
+| `createdAt` | string, date-time | Время создания записи, UTC |
+| `request` | SimulationRequest | Пять исходных решений в порядке запроса, включая выбранные районы |
+| `result` | SimulationResult | Полный объект из раздела «Все поля результата» |
+
+`result` содержит версию модели, бюджет, базовые показатели, показатели после применения мер, эффекты с lag, синергии, самый слабый район, critical metrics, Score, прирост и объяснение. Для примера `result.finalScore = 56.54307`, `result.baselineScore = 52.55768`, `result.scoreDelta = 3.98539`, `result.budget.spent = 95`.
+
+Это отдельный снимок: следующие расчёты снова начинаются с исходных данных, прошлые решения не накапливаются. Клиент не передаёт готовый Score — его рассчитывает сервер. При последующем изменении модели старые результаты не пересчитываются.
+
+### GET /api/v1/simulations
+
+Возвращает историю только текущего профиля. Тела запроса нет.
+
+| Query-параметр | Тип | По умолчанию | Ограничение |
+|---|---|---|---|
+| `limit` | integer | `20` | От 1 до 100 |
+| `offset` | integer, int64 | `0` | Не меньше 0 |
+
+Пример: `GET /api/v1/simulations?limit=20&offset=0`. Ответ `200 OK`:
+
+```json
+{
+  "items": [
+    {
+      "id": "11111111-1111-4111-8111-111111111111",
+      "createdAt": "2026-09-23T10:00:00Z",
+      "modelVersion": "v1",
+      "finalScore": 56.54307,
+      "baselineScore": 52.55768,
+      "scoreDelta": 3.98539,
+      "budgetSpent": 95
+    }
+  ],
+  "limit": 20,
+  "offset": 0,
+  "hasMore": false
+}
+```
+
+| Поле | Назначение |
+|---|---|
+| `items` | Массив кратких записей; пустая история возвращает `[]` |
+| `items[].id` | UUID для запроса полного сценария |
+| `items[].createdAt` | Время создания сценария, UTC |
+| `items[].modelVersion` | Версия модели при сохранении |
+| `items[].finalScore` | Точный итоговый Score без округления для интерфейса |
+| `items[].baselineScore` | Базовый Score той же версии модели |
+| `items[].scoreDelta` | Разница между итоговым и базовым Score |
+| `items[].budgetSpent` | Потраченные бюджетные единицы |
+| `limit`, `offset` | Параметры текущей страницы |
+| `hasMore` | Есть ли ещё записи после текущей страницы |
+
+Сортировка: `createdAt DESC`, затем `id DESC` для совпавшего времени. Следующая страница — `offset + items.length`, если `hasMore = true`. При сохранении новых сценариев между загрузками страниц смещения меняются; после сохранения обновляйте историю с `offset=0`. `total` не вычисляется. `userId` не является фильтром: отправка чужого идентификатора не меняет владельца из токена.
+
+### GET /api/v1/simulations/{id}
+
+Принимает UUID сценария и токен текущего профиля. Возвращает `200 OK` с тем же `SavedSimulationResponse`, что и запрос сохранения. Данные берутся из БД; калькулятор и объяснение повторно не вызываются. Чужой и отсутствующий сценарии одинаково возвращают `404`. Неверный формат UUID возвращает `400`.
+
+### Ошибки сохранения и истории
+
+| HTTP | Причина |
+|---|---|
+| `400` | Невалидный JSON, отсутствующее тело сохранения, неверный UUID или параметры страницы |
+| `401` | Нет действующего токена профиля |
+| `404` | У текущего профиля нет сценария с таким UUID |
+| `422` | Нарушены правила пяти решений; `errors` совпадает с форматом `/calculate` |
+| `503` | Профиль `postgres` отключён либо операция с БД завершилась ошибкой |
+
+Формат ошибок — Problem Details. Токены, SQL и реквизиты БД в ответы не включаются.
+
+### Пример для frontend
+
+Вызов `saveSelection` можно привязать к кнопке «Сохранить». Пример использует API контейнера на порту 8081, регистрацию или вход по форме и JWT в памяти страницы. После перезагрузки страницы нужно снова войти; историю это не удаляет:
+
+```javascript
+const API = "http://localhost:8081/api/v1";
+let accessToken;
+
+async function request(path, options = {}) {
+  const response = await fetch(`${API}${path}`, options);
+  const body = await response.json();
+  if (!response.ok) throw Object.assign(new Error(body.detail ?? "Ошибка API"), {
+    status: response.status, problem: body
+  });
+  return body;
+}
+
+async function authenticate(mode, credentials) {
+  // mode = "register": {email, password, username}; "login": {email, password}.
+  if (!["register", "login"].includes(mode)) throw new Error("Неизвестная операция");
+  const session = await request(`/auth/${mode}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(credentials)
+  });
+  accessToken = session.accessToken;
+  return session.user;
+}
+
+function authorization() {
+  if (!accessToken) throw new Error("Сначала войдите в аккаунт");
+  return { Authorization: `Bearer ${accessToken}` };
+}
+
+async function saveSelection(decisions) {
+  const saved = await request("/simulations", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authorization() },
+    body: JSON.stringify({ decisions })
+  });
+  // Запись уже подтверждена. saved.result включает bestSolution,
+  // comparison и готовое explanation от LLM или шаблона.
+  return saved;
+}
+
+async function loadHistory(offset = 0) {
+  return request(`/simulations?limit=20&offset=${offset}`, {
+    headers: authorization()
+  });
+}
+
+async function loadSaved(id) {
+  return request(`/simulations/${encodeURIComponent(id)}`, {
+    headers: authorization()
+  });
+}
+
+function logoutLocally() {
+  accessToken = undefined;
+}
+```
+
+При `401` обработайте ошибку формы и предложите войти повторно в тот же аккаунт. Новый JWT откроет прежнюю историю. Пример не сохраняет пароль и не создаёт анонимный профиль автоматически. Ключ внешнего LLM остаётся на backend. Каждый новый сценарий сравнивается с глобальным максимумом модели; сравнение двух произвольных записей истории пока не реализовано.
+
+## Поиск лучшего набора и подключение LLM
+
+Последний запрос симуляции — отправка полного набора из пяти решений. На `calculate` и при сохранении backend сначала проверяет запрос и считает пользовательский Score, затем получает глобальный максимум для того же каталога и правил.
+
+`SimulationOptimizer` перебирает сочетания пяти уникальных мер, отсеивает превышение бюджета 100, лимита двух мер направления и глобальные конфликты. Для оставшихся сочетаний перебирает назначения районов с учётом локальных конфликтов. Целевая функция — точный `0.7 × D_avg + 0.3 × D_min − N_crit`, включая лаги, синергии, отрицательные эффекты и clip. Равенство Score разрешается меньшим бюджетом, затем порядком ID мер и районов. Оптимальность относится к фиксированной синтетической модели, а не к реальной городской политике.
+
+Для текущего каталога из 14 мер и 5 районов проверяются 694395 допустимых вариантов. Результат кешируется в памяти процесса для неизменных правил и данных; новый процесс вычисляет его заново. Победивший набор проходит общий валидатор и `ScoreCalculator`.
+
+| Поле | Содержимое |
+|---|---|
+| `bestSolution.decisions` | Пять лучших решений; формат подходит для повторного POST |
+| `bestSolution.finalScore`, `displayScore`, `scoreDelta` | Точный максимум, отображаемое округление и прирост к базе |
+| `bestSolution.budget`, `summary`, `districts`, `measureEffects`, `synergies` | Полный числовой разбор лучшего набора |
+| `bestSolution.algorithm`, `provenOptimal`, `evaluatedCandidates` | `exhaustive-search`, `true`, число проверенных допустимых вариантов |
+| `comparison.scoreGap` | `bestSolution.finalScore − finalScore`, без округления |
+| `comparison.isOptimal` | Score пользователя совпадает с максимумом; наборы могут различаться |
+
+`baseline` не вызывает оптимизатор или LLM; оба новых поля равны `null`.
+
+Переменные окружения: `SIMULATION_LLM_URL` — полный URL chat-completions endpoint, `SIMULATION_LLM_MODEL` — ID модели, `SIMULATION_LLM_API_KEY` — необязательный ключ для локального сервера, `SIMULATION_LLM_TIMEOUT_MS` — таймаут в миллисекундах (по умолчанию 10000). Docker Compose передаёт их из `.env`; при запуске из IDE задайте их в конфигурации запуска.
+
+Один запрос LLM содержит правила, нормализованный выбор пользователя и результат с лучшим набором и сравнением. Модель формирует русское резюме; `strengths`, `risks` и `recommendations` остаются детерминированными. Числовые поля нельзя заменить ответом модели. При отсутствующей настройке, таймауте, HTTP-ошибке или некорректном ответе возвращается объяснение по шаблону вместе со сравнением. Текущий Laya `/v1/systemone` не поддерживает этот протокол генерации текста.
+
 ## Формула и ограничения
 
 ### Условия допустимого сценария
@@ -946,7 +1305,7 @@ API не поддерживает фильтр `?kind=...` или `?districtId=.
 |---|---|
 | `openapi` | Версию формата OpenAPI |
 | `info` | Название, описание и версию прикладного API |
-| `servers` | Адрес сервера; в сохранённом экспорте — localhost:8080 |
+| `servers` | Адрес сервера; в сохранённой схеме — localhost:8080 (IDE) и localhost:8081 (Docker) |
 | `tags` | Группы операций, включая `Simulation` |
 | `paths` | Пути, HTTP-методы, параметры, тела запросов, примеры и ответы |
 | `components.schemas` | Модели запросов и ответов, на которые ссылаются операции |
@@ -991,7 +1350,9 @@ Frontend
   → SimulationService
       → SimulationValidator
       → ScoreCalculator
+      → SimulationOptimizer
       → SimulationExplanationService
+      → SimulationLlmClient (при настройке)
   → SimulationResult
 ```
 
@@ -1010,24 +1371,189 @@ Frontend
 | `simulation/SimulationValidator` | Проверки набора решений и стабильная сортировка выбранных мер |
 | `simulation/SimulationRules` | Бюджет, горизонт, число решений, веса, порог, синергии и конфликты |
 | `simulation/ScoreCalculator` | Эффекты, lag, synergy, clip, баллы районов и итоговая формула |
+| `simulation/SimulationOptimizer` | Полный поиск и кеширование глобально лучшего допустимого набора |
+| `simulation/SimulationLlmClient` | Один запрос LLM с выбором пользователя, лучшим набором и точными результатами |
 | `simulation/SimulationResult` | Все вложенные модели успешного ответа |
 | `simulation/SimulationExplanationService` | Русское объяснение по шаблону на основе чисел калькулятора |
 | `simulation/SimulationValidationException` | Список нарушений с кодами, полями и сообщениями |
 | `simulation/SimulationExceptionHandler` | Преобразование нарушения правил в HTTP 422 Problem Details |
+| `history/SimulationHistoryController` | Профиль, сохранение и чтение истории; Swagger и HTTP-статусы |
+| `history/SimulationHistoryService` | Проверка токена, расчёт перед записью, транзакции и пагинация |
+| `history/AnonymousTokens` | Генерация случайного токена и SHA-256 для поиска профиля |
+| `history/AnonymousUserRepository` | Хранение профилей и хешей токенов через JDBC |
+| `history/SimulationHistoryRepository` | Запись JSONB-снимков и чтение только по текущему владельцу |
+| `history/HistoryPersistenceConfig` | Менеджер JDBC-транзакций для истории |
+| `history/HistoryExceptionHandler` | Ошибки доступа и хранилища в формате Problem Details |
+| `history/AnonymousUserResponse`, `SavedSimulationResponse`, `SimulationHistoryPage` | Контракты новых ответов API |
+| `auth/AuthController`, `auth/AdminController` | Регистрация, вход, профиль и маршрут администратора |
+| `auth/AuthService`, `auth/AccountRepository` | Создание и поиск аккаунтов, проверка BCrypt-пароля, доступ к users через JDBC |
+| `auth/AdminAccountInitializer` | Создание отсутствующего администратора при запуске |
+| `auth/JwtTokenService`, `auth/JwtConfiguration` | Подпись и проверка JWT, секрет, срок действия, издатель и аудитория |
+| `auth/SecurityConfiguration`, `auth/TokenAuthenticationManager` | Защита маршрутов, загрузка владельца и актуальной роли из БД |
+| `auth/AuthExceptionHandler`, `auth/SecurityProblemWriter` | Ошибки регистрации, входа и доступа без раскрытия паролей |
 | `mapdata/MapDataController` | HTTP-маршруты геоданных и заголовки кеширования |
 | `mapdata/MapLayer` | Идентификаторы слоёв, имена ресурсов, счётчики и Content-Type |
 | `mapdata/MapDataService` | Чтение файлов из classpath и кеширование в памяти |
 | `config/WebConfig` | CORS для браузерного frontend |
 | `config/OpenApiConfig` | Название, версия и описание API в Swagger |
 
+## PostgreSQL и Docker Desktop
+
+PostgreSQL уже описан сервисом `postgres` в корневом `compose.yaml`. Сервис `backend-akim` собирает Java-приложение и подключается к этой БД по имени `postgres` внутри общей Docker-сети.
+
+### Запуск двух контейнеров
+
+Откройте Docker Desktop и выполните из корня репозитория:
+
+```powershell
+docker compose --env-file .env.example up -d --build backend-akim
+```
+
+Будут запущены `backend-akim` и его зависимость `postgres`. Laya, Redis, Qdrant и MinIO для этого соединения не требуются и этой командой не запускаются. В Docker Desktop откройте группу **hack-61391193**. После готовности PostgreSQL стартует Java-backend; оба контейнера должны получить статус **healthy**.
+
+Файл `backend-akim/Dockerfile` собирает JAR внутри Maven/JDK 21 и запускает его в JRE 21. Сборка образа пропускает тесты. `Dockerfile.dockerignore` ограничивает контекст Java-исходниками и шестью файлами карты, исключая модели, Parquet и локальные секреты.
+
+Для собственных настроек используйте локальный `.env`, созданный на основе `.env.example`; тогда параметр `--env-file .env.example` можно опустить. `.env` исключён из Git. Не заменяйте уже существующий файл с настройками.
+
+### Адреса и реквизиты для локальной проверки
+
+| Параметр | С компьютера | Между контейнерами |
+|---|---|---|
+| Backend | `http://localhost:8081` | `http://backend-akim:8080` |
+| PostgreSQL host | `localhost` | `postgres` |
+| PostgreSQL port | `POSTGRES_PORT`, в примере `5432` | Всегда `5432` |
+| База | `POSTGRES_DB`, в примере `hack` | То же значение |
+| Пользователь | `POSTGRES_USER`, в примере `hack` | То же значение |
+| Пароль | `POSTGRES_PASSWORD` из выбранного env-файла | То же значение |
+
+Пароль в `.env.example` — пример для локальной разработки. Java-backend получает реквизиты через переменные окружения. PostgreSQL хранит данные в volume `postgres-data`, который сохраняется при остановке контейнера. Реквизиты `POSTGRES_*` инициализируют новую базу при первом создании её каталога данных; изменение env-файла не меняет пользователя и пароль в уже существующей базе.
+
+### Проверка в браузере
+
+Откройте [http://localhost:8081/actuator/health/db](http://localhost:8081/actuator/health/db). Ожидаемый ответ при успешном соединении:
+
+```json
+{"status":"UP"}
+```
+
+Этот же маршрут используется healthcheck контейнера Java. Он проверяет доступность БД через настроенный datasource. Одного успешного `pg_isready` у PostgreSQL недостаточно для подтверждения соединения Java — поэтому проверяются оба контейнера.
+
+Общее состояние: [http://localhost:8081/actuator/health](http://localhost:8081/actuator/health). Swagger: [http://localhost:8081/swagger-ui/index.html](http://localhost:8081/swagger-ui/index.html).
+
+### Проверка соединений внутри Docker Desktop
+
+Откройте контейнер **postgres → Exec** и выполните в его терминале:
+
+```sh
+psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+```
+
+В открывшейся SQL-консоли:
+
+```sql
+SELECT current_database(), current_user;
+
+SELECT application_name, usename, datname, state
+FROM pg_stat_activity
+WHERE application_name = 'backend-akim';
+```
+
+Подключения Java помечены именем `backend-akim`. Состояние `idle` нормально: соединение открыто в пуле и ждёт следующего запроса. Для выхода из `psql` используйте `\q`.
+
+В контейнере **backend-akim → Logs** можно увидеть запуск Spring с профилем `postgres` и сообщения пула `AkimPostgresPool`.
+
+### Java из IDE, PostgreSQL в Docker
+
+Для такого варианта запускается только сервис PostgreSQL:
+
+```powershell
+docker compose --env-file .env.example up -d postgres
+```
+
+В конфигурации запуска Java задайте `SPRING_PROFILES_ACTIVE=postgres`, `POSTGRES_HOST=localhost`, `POSTGRES_PORT=5432`, `POSTGRES_DB=hack`, `POSTGRES_USER=hack`, `POSTGRES_PASSWORD` и `JWT_SECRET` из того же env-файла. При необходимости задайте `JWT_TTL_SECONDS` и `ADMIN_*`. Если вы изменили порт или реквизиты, используйте свои значения. Spring не читает корневой `.env` автоматически: для IDE эти значения нужно передать в окружение процесса. Сам Java-backend в этом режиме по умолчанию слушает `8080`.
+
+Без профиля `postgres` backend продолжает работать без datasource; `/actuator/health/db` в таком режиме не предоставляется, а операции регистрации, входа, профиля и истории возвращают `503`. С профилем `postgres` включён Flyway. Hibernate `ddl-auto=none` и SQL-init `mode=never` оставлены: таблицами управляют версионированные миграции.
+
+### Таблицы сохранённых сценариев
+
+Миграции из `backend-akim/src/main/resources/db/migration/` применяются автоматически при запуске backend с профилем `postgres`. V1 создаёт историю и исходные анонимные профили; V2 переименовывает `anonymous_users` в `users` и добавляет поля зарегистрированных аккаунтов. Существующие UUID, хеши анонимных токенов, сценарии и связь владельца сохраняются. Flyway использует отдельную схему `akim`, чтобы таблицы симулятора не смешивались с другими сервисами. Служебная таблица `akim.flyway_schema_history` учитывает выполненные миграции; повторный запуск сохраняет существующие записи. Механизм подключения соответствует [документации Spring Boot о Flyway](https://docs.spring.io/spring-boot/how-to/data-initialization.html).
+
+| Таблица | Данные |
+|---|---|
+| `akim.users` | `id` UUID, `email`, `username`, `password_hash` BCrypt, `role`, `created_at`; для старых анонимных профилей — уникальный `token_hash` SHA-256 и пустые поля аккаунта |
+| `akim.simulations` | `id` UUID, `user_id` (внешний ключ профиля), `created_at`, `model_version`, `request` JSONB, `result` JSONB, `final_score`, `baseline_score`, `score_delta`, `budget_spent` |
+
+В `request` сохраняются меры и районы. В `result` хранится весь `SimulationResult`, включая исходные и итоговые показатели. Точные числа дополнительно вынесены в `NUMERIC` без ограничения числа знаков; индекс `(user_id, created_at DESC, id DESC)` обслуживает историю. Эти записи не изменяются API: каждый новый выбор сохраняется отдельным снимком.
+
+После сохранения примера через Swagger откройте **Docker Desktop → postgres → Exec** и войдите в psql:
+
+```sh
+psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+```
+
+Внутри psql:
+
+```sql
+\dt akim.*
+
+SELECT id, email, username, role, created_at
+FROM akim.users
+WHERE email IS NOT NULL
+ORDER BY created_at DESC;
+
+SELECT id, user_id, created_at, model_version, final_score, score_delta, budget_spent
+FROM akim.simulations
+ORDER BY created_at DESC, id DESC
+LIMIT 10;
+
+SELECT id, request, result -> 'summary' AS summary
+FROM akim.simulations
+ORDER BY created_at DESC, id DESC
+LIMIT 1;
+```
+
+Данные сохраняются в существующем volume `postgres-data` после остановки, перезапуска и пересборки backend. Удаление этого volume удаляет и профили, и историю. При изменении реквизитов уже существующей базы используйте её действующие логин/пароль, а не создавайте новое хранилище ради настройки подключения.
+
+### Проверки реализации
+
+`AuthenticationIntegrationTests` проверяет регистрацию, вход, BCrypt, нормализацию email, ограничения полей, JWT с неверной подписью/сроком/claims, роли, изоляцию истории, совместимость старых токенов и ответ `503` при сбое БД во время авторизации. Используется отдельный PostgreSQL через Testcontainers. При реализации авторизации проверена компиляция этих тестов, без их выполнения.
+
+`SimulationHistoryIntegrationTests` проверяет миграцию на отдельном временном PostgreSQL, сохранение и чтение снимка без повторного расчёта, изоляцию профилей, ошибки токенов, отказ при невалидных решениях, пагинацию и откат INSERT при ошибке. Используется [Testcontainers PostgreSQL](https://java.testcontainers.org/modules/databases/postgres/); без доступного Docker эти тесты пропускаются. Тестовая БД не использует volume приложения.
+
+`HistoryWithoutDatabaseTests` проверяет `503` без профиля `postgres`, работоспособность обычного калькулятора и описание Bearer-токена в OpenAPI. Команда для будущего запуска всех тестов из `backend-akim` при JDK 21: `./mvnw.cmd test`. Во время добавления этой функциональности выполнена только компиляция основного кода и тестов через `./mvnw.cmd -DskipTests test-compile`; приложение, контейнеры и тесты не запускались.
+
 ## Настройки и расположение данных
 
-Стек текущего проекта: Java 21, Spring Boot 4.1.1, Spring Web MVC, springdoc-openapi 3.0.3. В `pom.xml` присутствуют JPA/JDBC и драйвер PostgreSQL, но автоконфигурация datasource и Hibernate отключена: нынешние справочники и расчёты работают без БД.
+Стек текущего проекта: Java 21, Spring Boot 4.1.1, Spring Web MVC, Spring Security, JWT, BCrypt, springdoc-openapi 3.0.3, Spring Boot Actuator, Flyway. Профиль `postgres` включает JPA/JDBC и драйвер PostgreSQL; аккаунты и история используют JDBC. При работе без этого профиля datasource, Hibernate и Flyway отключены; справочники и расчёты работают без БД. Docker Compose включает профиль автоматически.
 
 | Настройка | Значение по умолчанию | Для чего нужна |
 |---|---|---|
 | `spring.application.name` | `backend-akim` | Имя приложения |
 | `PORT` → `server.port` | `8080` | Порт HTTP-сервера |
+| `BACKEND_PORT` в Compose | `8081` | Внешний порт контейнерного Java-backend; внутри контейнера `8080` |
+| `SPRING_PROFILES_ACTIVE` | Не задан | Значение `postgres` включает подключение к БД |
+| `POSTGRES_HOST` в профиле postgres | `localhost` | Адрес БД; Compose передаёт `postgres` |
+| `POSTGRES_PORT` в профиле postgres | `5432` | Порт БД; между контейнерами фиксирован `5432` |
+| `POSTGRES_DB` | `hack` | Имя базы |
+| `POSTGRES_USER` | `hack` | Пользователь базы |
+| `POSTGRES_PASSWORD` | Без значения по умолчанию в Spring | Обязательный пароль для профиля postgres |
+| `JWT_SECRET` → `app.auth.jwt.secret` | Обязателен в профиле postgres | Base64-секрет подписи HS256; минимум 32 байта после декодирования. Пример для разработки есть в `.env.example` |
+| `JWT_TTL_SECONDS` → `app.auth.jwt.ttl-seconds` | `3600` | Срок действия JWT в секундах, от 60 до 86400 |
+| `app.auth.jwt.issuer` | `akim-backend` | Ожидаемый издатель JWT (`iss`) |
+| `app.auth.jwt.audience` | `akim-api` | Ожидаемая аудитория JWT (`aud`) |
+| `ADMIN_EMAIL` → `app.auth.admin.email` | `admin@example.com` | Email создаваемого администратора, зарезервирован для публичной регистрации |
+| `ADMIN_PASSWORD` → `app.auth.admin.password` | `Admin` | Начальный пароль; не меняет пароль уже существующего администратора |
+| `ADMIN_USERNAME` → `app.auth.admin.username` | `admin` | Отображаемое имя создаваемого администратора |
+| `spring.datasource.hikari.maximum-pool-size` | `5` в профиле postgres | Максимум подключений Java в пуле |
+| `spring.datasource.hikari.minimum-idle` | `1` в профиле postgres | Минимум свободных подключений |
+| `spring.datasource.hikari.connection-timeout` | `5000` мс | Ожидание соединения из пула |
+| `spring.datasource.hikari.validation-timeout` | `3000` мс | Проверка соединения |
+| `spring.datasource.hikari.data-source-properties.ApplicationName` | `backend-akim` | Имя сессий Java в PostgreSQL |
+| `spring.jpa.hibernate.ddl-auto` | `none` в профиле postgres | Автоматическое создание/изменение таблиц отключено |
+| `spring.flyway.enabled` | `false` без БД, `true` в профиле postgres | Применять SQL-миграции при запуске |
+| `spring.flyway.default-schema`, `spring.flyway.schemas` | `akim` | Отдельная схема таблиц симулятора |
+| `spring.flyway.locations` | `classpath:db/migration` | Каталог версионированных миграций |
+| `management.endpoints.web.exposure.include` | `health` | Публикуется только endpoint состояния Actuator |
 | `CORS_ALLOWED_ORIGINS` → `app.cors.allowed-origin-patterns` | `http://localhost:*,http://127.0.0.1:*` | Разрешённые адреса frontend; несколько значений разделяются запятыми |
 | `spring.mvc.problemdetails.enabled` | `true` | Ответы ошибок в формате Problem Details |
 | `springdoc.swagger-ui.path` | `/swagger-ui.html` | Вход в Swagger UI |
@@ -1036,7 +1562,7 @@ Frontend
 | `springdoc.swagger-ui.tags-sorter` | `alpha` | Алфавитная сортировка групп |
 | `springdoc.paths-to-match` | `/api/**` | Какие прикладные пути включаются в схему |
 
-CORS действует для `/api/**`, разрешает методы `GET`, `POST`, `OPTIONS` и любые заголовки запроса. Разрешение на передачу credentials отдельно не включено. Для frontend на другом домене задаётся его origin в `CORS_ALLOWED_ORIGINS`.
+CORS действует для `/api/**`, разрешает методы `GET`, `POST`, `OPTIONS` и любые заголовки запроса, включая `Authorization`. Заголовок ответа `Location` доступен браузерному JavaScript. Cookie-авторизация не используется, `allowCredentials` не включён. Для frontend на другом домене задаётся его origin в `CORS_ALLOWED_ORIGINS`.
 
 ### Источники файлов
 
@@ -1052,8 +1578,14 @@ CORS действует для `/api/**`, разрешает методы `GET`,
 | [scripts/overture_astana.py](scripts/overture_astana.py) | Подготовка GeoJSON и районной статистики из Overture |
 | [backend-akim/pom.xml](backend-akim/pom.xml) | Зависимости и включение файлов карты в сборку |
 | [backend-akim/src/main/resources/application.yaml](backend-akim/src/main/resources/application.yaml) | Настройки приложения |
+| [backend-akim/src/main/resources/application-postgres.yaml](backend-akim/src/main/resources/application-postgres.yaml) | Профиль соединения с PostgreSQL |
+| [backend-akim/src/main/resources/db/migration/V1__simulation_history.sql](backend-akim/src/main/resources/db/migration/V1__simulation_history.sql) | Создание таблиц профилей и истории |
+| [backend-akim/src/main/resources/db/migration/V2__registered_users.sql](backend-akim/src/main/resources/db/migration/V2__registered_users.sql) | Аккаунты пользователей и роли с сохранением старых анонимных профилей и истории |
+| [backend-akim/Dockerfile](backend-akim/Dockerfile) | Сборка и запуск контейнерного Java-backend |
+| [compose.yaml](compose.yaml) | Сервисы Docker, переменные окружения и зависимости |
+| [.env.example](.env.example) | Пример параметров PostgreSQL и внешних портов |
 
-**Соответствие путей в текущей рабочей копии:** геоданные находятся в `data1/overture/astana`, при этом ресурсная секция `pom.xml` ожидает `${project.basedir}/../data/overture/astana`, а `scripts/overture_astana.py` пишет в `data/overture/astana`. Для новой сборки с геоданными эти пути должны быть согласованы. В уже собранном приложении файлы читаются из classpath `map-data/astana/`; напрямую каталог `data1` сервер не читает.
+Геоданные для Maven и Docker берутся из `data1/overture/astana` и включаются в classpath `map-data/astana/`. Сам сервер читает файлы из собранного приложения. Скрипт `scripts/overture_astana.py` по-прежнему пишет новую выгрузку в `data/overture/astana`: при пересборке геоданных её нужно перенести в каталог, который использует backend, либо согласовать выходной путь скрипта.
 
 В сборку включаются `city_boundary.geojson`, `district_stats.json`, `districts.geojson`, `parks.geojson`, `pois.geojson`, `roads_main.geojson`. CSV статистики и исходные Parquet-файлы не включены в эти API.
 

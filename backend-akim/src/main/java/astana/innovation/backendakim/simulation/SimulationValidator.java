@@ -47,6 +47,7 @@ public class SimulationValidator {
             if (!ids.add(measure.id())) {
                 errors.add(new Violation("DUPLICATE_MEASURE", field + ".measureId", "Повтор мероприятия " + measure.id() + " запрещён"));
             }
+            String validatedDistrictId = null;
             if ("city".equals(measure.scope())) {
                 if (decision.districtId() != null) {
                     errors.add(new Violation("CITY_DISTRICT_FORBIDDEN", field + ".districtId", "Для городской меры район не указывается"));
@@ -55,10 +56,12 @@ public class SimulationValidator {
                 errors.add(new Violation("DISTRICT_REQUIRED", field + ".districtId", "Для районной меры выберите район"));
             } else if (catalog.getDistricts().stream().noneMatch(d -> d.id().equals(decision.districtId()))) {
                 errors.add(new Violation("UNKNOWN_DISTRICT", field + ".districtId", "Неизвестный район: " + decision.districtId()));
+            } else {
+                validatedDistrictId = decision.districtId();
             }
             categoryCounts.merge(measure.categoryId(), 1, Integer::sum);
             cost += measure.cost();
-            selected.add(new SelectedMeasure(measure, decision.districtId()));
+            selected.add(new SelectedMeasure(measure, validatedDistrictId));
         }
         if (cost > SimulationRules.BUDGET) {
             errors.add(new Violation("BUDGET_EXCEEDED", "decisions", "Стоимость " + cost + " превышает бюджет 100"));
@@ -69,15 +72,18 @@ public class SimulationValidator {
             }
         });
         for (SimulationRules.ConflictRule conflict : SimulationRules.CONFLICTS) {
-            for (SelectedMeasure first : selected) {
-                for (SelectedMeasure second : selected) {
-                    if (first.measure().id().equals(conflict.firstMeasureId())
-                            && second.measure().id().equals(conflict.secondMeasureId())
-                            && (!conflict.sameDistrictOnly()
-                                || first.districtId() != null && Objects.equals(first.districtId(), second.districtId()))) {
-                        errors.add(new Violation("CONFLICT", "decisions", conflict.reason()));
-                    }
-                }
+            SelectedMeasure first = selected.stream()
+                    .filter(selection -> selection.measure().id().equals(conflict.firstMeasureId()))
+                    .findFirst()
+                    .orElse(null);
+            SelectedMeasure second = selected.stream()
+                    .filter(selection -> selection.measure().id().equals(conflict.secondMeasureId()))
+                    .findFirst()
+                    .orElse(null);
+            if (first != null && second != null
+                    && (!conflict.sameDistrictOnly()
+                        || first.districtId() != null && Objects.equals(first.districtId(), second.districtId()))) {
+                errors.add(new Violation("CONFLICT", "decisions", conflict.reason()));
             }
         }
         if (!errors.isEmpty()) throw new SimulationValidationException(errors);

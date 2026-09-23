@@ -1,0 +1,39 @@
+spring:
+  flyway:
+    enabled: true
+    default-schema: akim
+    schemas: akim
+    create-schemas: true
+    locations: classpath:db/migration
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:hack}
+    username: ${POSTGRES_USER:hack}
+    password: ${POSTGRES_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      pool-name: AkimPostgresPool
+      maximum-pool-size: 5
+      minimum-idle: 1
+      connection-timeout: 5000
+      validation-timeout: 3000
+      data-source-properties:
+        ApplicationName: backend-akim
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+  sql:
+    init:
+      mode: never
+
+app:
+  auth:
+    jwt:
+      secret: ${JWT_SECRET}
+      ttl-seconds: ${JWT_TTL_SECONDS:3600}
+      issuer: akim-backend
+      audience: akim-api
+    admin:
+      email: ${ADMIN_EMAIL:admin@example.com}
+      password: ${ADMIN_PASSWORD:Admin}
+      username: ${ADMIN_USERNAME:admin}

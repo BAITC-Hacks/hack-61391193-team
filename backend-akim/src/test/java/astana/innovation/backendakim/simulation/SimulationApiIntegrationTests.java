@@ -9,9 +9,12 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import tools.jackson.databind.ObjectMapper;
 
 import java.util.stream.Stream;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -21,19 +24,33 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 class SimulationApiIntegrationTests {
     @Autowired private MockMvc mvc;
+    @Autowired private ObjectMapper json;
 
     @Test
     void calculatesThroughBothRoutes() throws Exception {
         for (String path : new String[]{"/api/simulation/calculate", "/api/v1/simulation/calculate"}) {
-            mvc.perform(post(path).contentType(MediaType.APPLICATION_JSON).content(SimulationRequest.EXAMPLE_JSON))
+            var response = mvc.perform(post(path).contentType(MediaType.APPLICATION_JSON).content(SimulationRequest.EXAMPLE_JSON))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.finalScore").value(56.54307))
+                    .andExpect(jsonPath("$.displayScore").value(56.54))
                     .andExpect(jsonPath("$.baselineScore").value(52.55768))
                     .andExpect(jsonPath("$.scoreDelta").value(3.98539))
+                    .andExpect(jsonPath("$.budget.spent").value(95))
+                    .andExpect(jsonPath("$.budget.remaining").value(5))
                     .andExpect(jsonPath("$.summary.nCrit").value(0))
                     .andExpect(jsonPath("$.districts", hasSize(5)))
                     .andExpect(jsonPath("$.measureEffects", hasSize(5)))
-                    .andExpect(jsonPath("$.explanation.source").value("template"));
+                    .andExpect(jsonPath("$.explanation.source").value("template"))
+                    .andExpect(jsonPath("$.bestSolution.algorithm").value("exhaustive-search"))
+                    .andExpect(jsonPath("$.bestSolution.provenOptimal").value(true))
+                    .andExpect(jsonPath("$.bestSolution.evaluatedCandidates", greaterThan(0)))
+                    .andExpect(jsonPath("$.bestSolution.decisions", hasSize(5)))
+                    .andExpect(jsonPath("$.comparison.isOptimal").value(false))
+                    .andReturn();
+            var result = json.readValue(response.getResponse().getContentAsString(), SimulationResult.class);
+            assertThat(result.bestSolution().finalScore()).isGreaterThan(result.finalScore());
+            assertThat(result.comparison().scoreGap())
+                    .isEqualByComparingTo(result.bestSolution().finalScore().subtract(result.finalScore()));
         }
     }
 
@@ -105,7 +122,9 @@ class SimulationApiIntegrationTests {
     @Test
     void exposesBaselineSwaggerAndMachineReadableOpenApiWithExample() throws Exception {
         mvc.perform(get("/api/simulation/baseline")).andExpect(status().isOk())
-                .andExpect(jsonPath("$.finalScore").value(52.55768)).andExpect(jsonPath("$.summary.nCrit").value(2));
+                .andExpect(jsonPath("$.finalScore").value(52.55768)).andExpect(jsonPath("$.summary.nCrit").value(2))
+                .andExpect(jsonPath("$.bestSolution").doesNotExist())
+                .andExpect(jsonPath("$.comparison").doesNotExist());
         mvc.perform(get("/v3/api-docs")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.openapi").exists())
                 .andExpect(jsonPath("$.paths['/api/simulation/calculate'].post.responses['422']").exists())

@@ -1,6 +1,41 @@
 name: hack-61391193
 
 services:
+  backend-akim:
+    build:
+      context: .
+      dockerfile: backend-akim/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-8081}:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: postgres
+      PORT: "8080"
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS:-http://localhost:*,http://127.0.0.1:*}"
+      JWT_SECRET: ${JWT_SECRET:-}
+      JWT_TTL_SECONDS: ${JWT_TTL_SECONDS:-3600}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Admin}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      SIMULATION_LLM_URL: ${SIMULATION_LLM_URL:-}
+      SIMULATION_LLM_MODEL: ${SIMULATION_LLM_MODEL:-}
+      SIMULATION_LLM_API_KEY: ${SIMULATION_LLM_API_KEY:-}
+      SIMULATION_LLM_TIMEOUT_MS: ${SIMULATION_LLM_TIMEOUT_MS:-10000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/actuator/health/db"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
   postgres:
     image: postgres:16.15-alpine3.23
     restart: unless-stopped
