@@ -12,7 +12,6 @@ export default function AuthForm({ mode }: { mode: Mode }) {
   const isRegister = mode === "register";
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [registered, setRegistered] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -25,17 +24,20 @@ export default function AuthForm({ mode }: { mode: Mode }) {
       setError("Пароли не совпадают.");
       return;
     }
+    if (isRegister && new TextEncoder().encode(password).length > 72) {
+      setError("Пароль должен занимать не более 72 байт.");
+      return;
+    }
 
     setPending(true);
     try {
       if (isRegister) {
-        await register({ name: String(fields.get("name") ?? "").trim(), email, password });
-        setRegistered(true);
+        await register({ username: String(fields.get("username") ?? "").trim(), email, password });
       } else {
         await login({ email, password });
-        router.replace("/");
-        router.refresh();
       }
+      router.replace("/");
+      router.refresh();
     } catch (cause) {
       setError(cause instanceof AuthError ? cause.message : "Что-то пошло не так. Попробуйте снова.");
     } finally {
@@ -63,15 +65,6 @@ export default function AuthForm({ mode }: { mode: Mode }) {
               <Link href="/register" aria-current={isRegister ? "page" : undefined}>Регистрация</Link>
             </div>
 
-            {registered ? (
-              <div className="auth-success" role="status">
-                <span className="auth-success-icon" aria-hidden="true">✓</span>
-                <h2 id="auth-title">Аккаунт создан</h2>
-                <p>Теперь можно войти с адресом почты и паролем.</p>
-                <Link className="auth-submit" href="/login">Перейти ко входу</Link>
-              </div>
-            ) : (
-              <>
                 <h2 id="auth-title">{isRegister ? "Создать аккаунт" : "С возвращением"}</h2>
                 <p className="auth-subtitle">{isRegister
                   ? "Заполните данные, чтобы начать работу с платформой."
@@ -80,22 +73,22 @@ export default function AuthForm({ mode }: { mode: Mode }) {
                   {isRegister && (
                     <label>
                       Имя
-                      <input name="name" type="text" autoComplete="name" placeholder="Ваше имя" required maxLength={100} />
+                      <input name="username" type="text" autoComplete="nickname" placeholder="Ваше имя" required minLength={3} maxLength={50} />
                     </label>
                   )}
                   <label>
                     Электронная почта
-                    <input name="email" type="email" autoComplete="email" placeholder="name@example.com" required />
+                    <input name="email" type="email" autoComplete="email" placeholder="name@example.com" required maxLength={254} />
                   </label>
                   <label>
                     Пароль
                     <input name="password" type="password" autoComplete={isRegister ? "new-password" : "current-password"}
-                      placeholder={isRegister ? "Не менее 8 символов" : "Введите пароль"} required minLength={isRegister ? 8 : undefined} />
+                      placeholder={isRegister ? "Не менее 8 символов" : "Введите пароль"} required minLength={isRegister ? 8 : undefined} maxLength={72} />
                   </label>
                   {isRegister && (
                     <label>
                       Повторите пароль
-                      <input name="confirmPassword" type="password" autoComplete="new-password" placeholder="Повторите пароль" required minLength={8} />
+                      <input name="confirmPassword" type="password" autoComplete="new-password" placeholder="Повторите пароль" required minLength={8} maxLength={72} />
                     </label>
                   )}
                   {error && <p className="auth-error" role="alert">{error}</p>}
@@ -104,8 +97,6 @@ export default function AuthForm({ mode }: { mode: Mode }) {
                   </button>
                 </form>
                 <p className="auth-switch">{isRegister ? "Уже есть аккаунт?" : "Нет аккаунта?"} <Link href={isRegister ? "/login" : "/register"}>{isRegister ? "Войти" : "Зарегистрироваться"}</Link></p>
-              </>
-            )}
             <Link href="/" className="auth-back">← Вернуться к карте</Link>
           </div>
         </section>

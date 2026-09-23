@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import AuthNav from "./auth-nav";
 import type { ExpressionSpecification } from "maplibre-gl";
 import type { FeatureCollection, MultiPolygon, Polygon } from "geojson";
 import {
@@ -174,6 +174,7 @@ export default function DistrictMap() {
           : { top: 104, right: (panelSize?.width ?? 370) + 68, bottom: 45, left: 45 },
         maxZoom: 11, duration: 0,
       });
+      console.info("district-map-fit", JSON.stringify({ bounds: boundsRef.current, width, height, zoom: map.getZoom(), center: map.getCenter().toArray() }));
     }
     function resizeMap() { map?.resize(); fitDistricts(); }
     window.addEventListener("resize", resizeMap);
@@ -193,6 +194,7 @@ export default function DistrictMap() {
         attributionControl: {},
       });
       mapRef.current = map;
+      map.on("moveend", () => console.info("district-map-camera", JSON.stringify({ zoom: map?.getZoom(), center: map?.getCenter().toArray(), bounds: map?.getBounds().toArray() })));
       map.addControl(new maplibregl.NavigationControl(), "top-right");
       map.on("load", async () => {
         try {
@@ -365,10 +367,7 @@ export default function DistrictMap() {
       <header className="map-brand">
         <h1>Астана · Районы</h1>
         <p>Выберите район на карте</p>
-        <nav className="map-auth-links" aria-label="Аккаунт">
-          <Link href="/login">Войти</Link>
-          <Link href="/register">Регистрация</Link>
-        </nav>
+        <AuthNav />
       </header>
       <div className="map-tools">
         <details>

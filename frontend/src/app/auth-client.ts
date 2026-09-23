@@ -1,7 +1,33 @@
 export type LoginRequest = { email: string; password: string };
-export type RegisterRequest = LoginRequest & { name: string };
+export type RegisterRequest = LoginRequest & { username: string };
+export type AuthUser = {
+  id: string;
+  email: string;
+  username: string;
+  role: "USER" | "ADMIN";
+  createdAt: string;
+};
 
-export class AuthError extends Error {}
+export class AuthError extends Error {
+  constructor(message: string, public status?: number) {
+    super(message);
+  }
+}
+
+async function readResponse<T>(response: Response): Promise<T> {
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    const detail = data && typeof data === "object" && "detail" in data && typeof data.detail === "string"
+      ? data.detail : null;
+    const fallback = response.status === 401 ? "Неверный адрес почты или пароль."
+      : response.status === 409 ? "Этот адрес почты уже зарегистрирован."
+      : response.status === 503 ? "Авторизация недоступна. Проверьте, что backend запущен с PostgreSQL."
+      : "Не удалось выполнить запрос. Проверьте данные и попробуйте снова.";
+    throw new AuthError(detail ?? fallback, response.status);
+  }
+  if (!data || typeof data !== "object") throw new AuthError("Сервер вернул некорректный ответ.");
+  return data as T;
+}
 
 async function sendAuthRequest(path: string, payload: LoginRequest | RegisterRequest) {
   let response: Response;
@@ -9,31 +35,30 @@ async function sendAuthRequest(path: string, payload: LoginRequest | RegisterReq
     response = await fetch(path, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      credentials: "include",
+      credentials: "same-origin",
       body: JSON.stringify(payload),
     });
   } catch {
     throw new AuthError("Не удалось связаться с сервером. Попробуйте позже.");
   }
-
-  if (response.ok) return;
-  if (response.status === 404 || response.status === 503) {
-    throw new AuthError("Авторизация пока не подключена. Попробуйте позже.");
-  }
-
-  const data = await response.json().catch(() => null);
-  const detail = data && typeof data === "object" && "detail" in data && typeof data.detail === "string"
-    ? data.detail
-    : null;
-  throw new AuthError(detail ?? (response.status === 401
-    ? "Неверный адрес почты или пароль."
-    : "Не удалось выполнить запрос. Проверьте данные и попробуйте снова."));
+  return readResponse<{ user: AuthUser }>(response);
 }
 
 export function login(payload: LoginRequest) {
-  return sendAuthRequest("/api/v1/auth/login", payload);
+  return sendAuthRequest("/api/session/login", payload);
 }
 
 export function register(payload: RegisterRequest) {
-  return sendAuthRequest("/api/v1/auth/register", payload);
+  return sendAuthRequest("/api/session/register", payload);
+}
+
+export async function getCurrentUser(): Promise<AuthUser | null> {
+  const response = await fetch("/api/session/me", { credentials: "same-origin", cache: "no-store" });
+  if (response.status === 401) return null;
+  return readResponse<AuthUser>(response);
+}
+
+export async function logout() {
+  const response = await fetch("/api/session/logout", { method: "POST", credentials: "same-origin" });
+  await readResponse<{ ok: true }>(response);
 }
