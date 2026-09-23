@@ -12,11 +12,13 @@ Backend рассчитывает **Astana Quality of Life Score**, провер�
 http://localhost:8080/api/v1
 ```
 
-Для frontend удобно задать его через переменную окружения:
+Frontend на Next.js проксирует запросы к backend. При запуске backend на другом порту задайте адрес до запуска frontend:
 
 ```env
-VITE_API_BASE_URL=http://localhost:8080/api/v1
+BACKEND_ORIGIN=http://127.0.0.1:8081
 ```
+
+Для запуска Java-backend из IDE на порту 8080 переменная не требуется. Вход и регистрация доступны при запуске backend с профилем `postgres` и PostgreSQL; подробности для frontend — в [frontend/README.md](frontend/README.md).
 
 ### Backend и PostgreSQL в Docker Desktop
 

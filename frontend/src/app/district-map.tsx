@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import AuthNav from "./auth-nav";
+import styles from "./district-map.module.css";
+import { ResultsOverlay, ScenarioDock, decisionFromInitiative, selectedDecisions } from "./scenario-ui";
 import type { ExpressionSpecification } from "maplibre-gl";
 import type { FeatureCollection, MultiPolygon, Polygon } from "geojson";
 import {
@@ -21,11 +23,6 @@ type LayerKey = "city" | "parks" | "roads" | "pois";
 const districtIds: Record<string, string> = {
   "Есиль": "esil", "Алматы": "almaty", "Сарыарка": "saryarka",
   "Байконур": "baikonur", "Нура": "nura",
-};
-const metricLabels: Record<string, string> = {
-  T1: "Дороги", T2: "Общественный транспорт", E1: "Озеленение", E2: "Воздух",
-  S1: "Школы и детсады", S2: "Медицина", B1: "Безопасность улиц",
-  B2: "Безопасность движения", C1: "ЖКХ", C2: "Обращения жителей",
 };
 const poiKinds: Record<string, string> = {
   school: "Школы", kindergarten: "Детсады", hospital: "Больницы",
@@ -58,11 +55,21 @@ function scoreColor(score: number): string {
   return "#458e81";
 }
 
-export default function DistrictMap() {
+export type InitiativeContext = {
+  districtName: string;
+  initiatives: DistrictMeasure[];
+  decisions: Decision[];
+  measures: Measure[];
+  bootstrap: Bootstrap;
+  onSelectInitiative: (initiative: DistrictMeasure) => void;
+};
+export type DistrictMapProps = { onOpenInitiatives?: (districtId: string, context: InitiativeContext) => void };
+
+export default function DistrictMap({ onOpenInitiatives }: DistrictMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
-  const panelRef = useRef<HTMLElement>(null);
   const mapRef = useRef<Map | null>(null);
   const selectedFeature = useRef<{ source: string; id: string | number } | null>(null);
+  const hoveredFeature = useRef<{ source: string; id: string | number } | null>(null);
   const boundsRef = useRef<[[number, number], [number, number]] | null>(null);
   const adminBounds = useRef<[[number, number], [number, number]] | null>(null);
   const modelBounds = useRef<[[number, number], [number, number]] | null>(null);
@@ -79,17 +86,19 @@ export default function DistrictMap() {
   const [modelGeojson, setModelGeojson] = useState<ModelDistricts | null>(null);
   const [cityGeojson, setCityGeojson] = useState<CityBoundary | null>(null);
   const [selected, setSelected] = useState<Selected | null>(null);
+  const [selectionPoint, setSelectionPoint] = useState<{ x: number; y: number } | null>(null);
   const [districtDetail, setDistrictDetail] = useState<District | null>(null);
   const [districtMeasures, setDistrictMeasures] = useState<DistrictMeasure[]>([]);
   const [boundaryMode, setBoundaryMode] = useState<"administrative" | "model">("administrative");
   const [visibleLayers, setVisibleLayers] = useState<Record<LayerKey, boolean>>({ city: false, parks: false, roads: false, pois: false });
   const [layerLoading, setLayerLoading] = useState<LayerKey | null>(null);
   const [poiKind, setPoiKind] = useState("school");
-  const [tab, setTab] = useState<"district" | "scenario">("district");
   const [decisions, setDecisions] = useState<Decision[]>([]);
   const [result, setResult] = useState<SimulationResult | null>(null);
+  const [showResults, setShowResults] = useState(false);
   const [calculating, setCalculating] = useState(false);
   const [calculationError, setCalculationError] = useState<string[]>([]);
+  const calculationId = useRef(0);
 
   function clearSelection() {
     const map = mapRef.current;
@@ -97,21 +106,45 @@ export default function DistrictMap() {
       map.setFeatureState(selectedFeature.current, { selected: false });
     }
     selectedFeature.current = null;
+    setSelectionPoint(null);
     setSelected(null);
     setDistrictDetail(null);
     setDistrictMeasures([]);
   }
 
-  function chooseFeature(source: string, id: string | number, name: string, districtId: string | null) {
+  function chooseFeature(source: string, id: string | number, name: string, districtId: string | null, point: { x: number; y: number }) {
     const map = mapRef.current;
     if (!map) return;
+    const sameFeature = selectedFeature.current?.source === source && selectedFeature.current.id === id;
     if (selectedFeature.current) map.setFeatureState(selectedFeature.current, { selected: false });
     selectedFeature.current = { source, id };
     map.setFeatureState({ source, id }, { selected: true });
     setSelected({ id: districtId, name });
-    setDistrictDetail(null);
-    setDistrictMeasures([]);
-    setTab("district");
+    const width = mapContainer.current?.clientWidth ?? window.innerWidth;
+    const height = mapContainer.current?.clientHeight ?? window.innerHeight;
+    const cardWidth = 356;
+    const cardHeight = 338;
+    setSelectionPoint({
+      x: Math.max(16, Math.min(point.x + 18, width - cardWidth - 16)),
+      y: Math.max(16, Math.min(point.y + 18, height - cardHeight - 16)),
+    });
+    if (!sameFeature) {
+      setDistrictDetail(null);
+      setDistrictMeasures([]);
+    }
+  }
+
+  function hoverFeature(source: string, id: string | number | null) {
+    const map = mapRef.current;
+    if (!map) return;
+    if (hoveredFeature.current && (hoveredFeature.current.source !== source || hoveredFeature.current.id !== id)) {
+      map.setFeatureState(hoveredFeature.current, { hover: false });
+      hoveredFeature.current = null;
+    }
+    if (id !== null && !hoveredFeature.current) {
+      hoveredFeature.current = { source, id };
+      map.setFeatureState(hoveredFeature.current, { hover: true });
+    }
   }
 
   useEffect(() => {
@@ -166,21 +199,17 @@ export default function DistrictMap() {
       if (!map || !boundsRef.current || !mapContainer.current) return;
       const width = mapContainer.current.clientWidth;
       const height = mapContainer.current.clientHeight;
-      const mobile = width <= 760;
-      const panelSize = panelRef.current?.getBoundingClientRect();
       map.fitBounds(boundsRef.current, {
-        padding: mobile
-          ? { top: 115, right: 22, bottom: Math.min(height * 0.58, (panelSize?.height ?? 230) + 48), left: 22 }
-          : { top: 104, right: (panelSize?.width ?? 370) + 68, bottom: 45, left: 45 },
+        padding: width <= 760
+          ? { top: 110, right: 22, bottom: Math.min(height * 0.46, 330), left: 22 }
+          : { top: 95, right: 56, bottom: 260, left: 56 },
         maxZoom: 11, duration: 0,
       });
-      console.info("district-map-fit", JSON.stringify({ bounds: boundsRef.current, width, height, zoom: map.getZoom(), center: map.getCenter().toArray() }));
     }
     function resizeMap() { map?.resize(); fitDistricts(); }
     window.addEventListener("resize", resizeMap);
     const observer = new ResizeObserver(resizeMap);
     observer.observe(mapContainer.current);
-    if (panelRef.current) observer.observe(panelRef.current);
 
     async function initialize() {
       const maplibregl = await import("maplibre-gl");
@@ -190,11 +219,9 @@ export default function DistrictMap() {
         container: mapContainer.current,
         style: "https://tiles.openfreemap.org/styles/liberty",
         center: [71.43, 51.17], zoom: 9,
-        maxBounds: [[71.12, 50.78], [71.88, 51.43]],
         attributionControl: {},
       });
       mapRef.current = map;
-      map.on("moveend", () => console.info("district-map-camera", JSON.stringify({ zoom: map?.getZoom(), center: map?.getCenter().toArray(), bounds: map?.getBounds().toArray() })));
       map.addControl(new maplibregl.NavigationControl(), "top-right");
       map.on("load", async () => {
         try {
@@ -202,21 +229,25 @@ export default function DistrictMap() {
           if (disposed || !map) return;
           map.addSource("administrative", { type: "geojson", data, promoteId: "objectid" });
           map.addLayer({ id: "administrative-fill", type: "fill", source: "administrative",
-            paint: { "fill-color": ["case", ["boolean", ["feature-state", "selected"], false], "#ea7b32", "#3479a5"], "fill-opacity": 0.34 } });
+            paint: { "fill-color": ["case", ["boolean", ["feature-state", "selected"], false], "#ea7b32", "#3479a5"], "fill-opacity": ["case", ["boolean", ["feature-state", "selected"], false], 0.68, ["boolean", ["feature-state", "hover"], false], 0.54, 0.34] } });
           map.addLayer({ id: "administrative-outline", type: "line", source: "administrative",
-            paint: { "line-color": ["case", ["boolean", ["feature-state", "selected"], false], "#d85b22", "#173f5a"],
-              "line-width": ["case", ["boolean", ["feature-state", "selected"], false], 4, 2.2] } });
+            paint: { "line-color": ["case", ["boolean", ["feature-state", "selected"], false], "#d85b22", ["boolean", ["feature-state", "hover"], false], "#155c78", "#173f5a"],
+              "line-width": ["case", ["boolean", ["feature-state", "selected"], false], 4, ["boolean", ["feature-state", "hover"], false], 3, 2.2] } });
           adminBounds.current = getBounds(data);
           boundsRef.current = adminBounds.current;
           fitDistricts();
           map.on("click", "administrative-fill", (event) => {
             const properties = event.features?.[0]?.properties;
             if (typeof properties?.objectid === "number" && typeof properties.name_object === "string") {
-              chooseFeature("administrative", properties.objectid, properties.name_object, districtIds[properties.name_object] ?? null);
+              chooseFeature("administrative", properties.objectid, properties.name_object, districtIds[properties.name_object] ?? null, event.point);
             }
           });
           map.on("mouseenter", "administrative-fill", () => { if (map) map.getCanvas().style.cursor = "pointer"; });
-          map.on("mouseleave", "administrative-fill", () => { if (map) map.getCanvas().style.cursor = ""; });
+          map.on("mousemove", "administrative-fill", (event) => hoverFeature("administrative", (event.features?.[0]?.id as string | number | undefined) ?? null));
+          map.on("mouseleave", "administrative-fill", () => { if (map) map.getCanvas().style.cursor = ""; hoverFeature("administrative", null); });
+          map.on("click", (event) => {
+            if (!map?.queryRenderedFeatures(event.point, { layers: ["administrative-fill", "model-fill"].filter((layer) => map?.getLayer(layer)) }).length) clearSelection();
+          });
           setMapReady(true);
         } catch (error) {
           if (!disposed) setMapError(error instanceof Error ? error.message : "Не удалось загрузить границы");
@@ -236,19 +267,20 @@ export default function DistrictMap() {
     if (!mapReady || !map || !modelGeojson || map.getSource("model")) return;
     map.addSource("model", { type: "geojson", data: modelGeojson, promoteId: "district_id", attribution: manifest?.attribution });
     map.addLayer({ id: "model-fill", type: "fill", source: "model", layout: { visibility: "none" },
-      paint: { "fill-color": ["case", ["boolean", ["feature-state", "selected"], false], "#ea7b32", "#3479a5"], "fill-opacity": 0.34 } });
+      paint: { "fill-color": ["case", ["boolean", ["feature-state", "selected"], false], "#ea7b32", "#3479a5"], "fill-opacity": ["case", ["boolean", ["feature-state", "selected"], false], 0.68, ["boolean", ["feature-state", "hover"], false], 0.54, 0.34] } });
     map.addLayer({ id: "model-outline", type: "line", source: "model", layout: { visibility: "none" },
-      paint: { "line-color": ["case", ["boolean", ["feature-state", "selected"], false], "#d85b22", "#173f5a"],
-        "line-width": ["case", ["boolean", ["feature-state", "selected"], false], 4, 2.2] } });
+      paint: { "line-color": ["case", ["boolean", ["feature-state", "selected"], false], "#d85b22", ["boolean", ["feature-state", "hover"], false], "#155c78", "#173f5a"],
+        "line-width": ["case", ["boolean", ["feature-state", "selected"], false], 4, ["boolean", ["feature-state", "hover"], false], 3, 2.2] } });
     modelBounds.current = getBounds(modelGeojson);
     map.on("click", "model-fill", (event) => {
       const properties = event.features?.[0]?.properties;
       if (typeof properties?.district_id === "string" && typeof properties.name_ru === "string") {
-        chooseFeature("model", properties.district_id, properties.name_ru, properties.district_id);
+        chooseFeature("model", properties.district_id, properties.name_ru, properties.district_id, event.point);
       }
     });
     map.on("mouseenter", "model-fill", () => { map.getCanvas().style.cursor = "pointer"; });
-    map.on("mouseleave", "model-fill", () => { map.getCanvas().style.cursor = ""; });
+    map.on("mousemove", "model-fill", (event) => hoverFeature("model", (event.features?.[0]?.id as string | number | undefined) ?? null));
+    map.on("mouseleave", "model-fill", () => { map.getCanvas().style.cursor = ""; hoverFeature("model", null); });
   }, [mapReady, modelGeojson, manifest]);
 
   useEffect(() => {
@@ -281,6 +313,7 @@ export default function DistrictMap() {
     const map = mapRef.current;
     if (!map || (next === "model" && !modelBounds.current)) return;
     clearSelection();
+    hoverFeature(boundaryMode === "model" ? "model" : "administrative", null);
     setBoundaryMode(next);
     for (const layer of ["administrative-fill", "administrative-outline"]) map.setLayoutProperty(layer, "visibility", next === "administrative" ? "visible" : "none");
     for (const layer of ["model-fill", "model-outline"]) map.setLayoutProperty(layer, "visibility", next === "model" ? "visible" : "none");
@@ -288,8 +321,8 @@ export default function DistrictMap() {
     const size = mapContainer.current;
     if (size && boundsRef.current) map.fitBounds(boundsRef.current, {
       padding: size.clientWidth <= 760
-        ? { top: 115, right: 22, bottom: Math.min(size.clientHeight * 0.58, (panelRef.current?.clientHeight ?? 230) + 48), left: 22 }
-        : { top: 104, right: (panelRef.current?.clientWidth ?? 370) + 68, bottom: 45, left: 45 },
+        ? { top: 110, right: 22, bottom: Math.min(size.clientHeight * 0.46, 330), left: 22 }
+        : { top: 95, right: 56, bottom: 260, left: 56 },
       maxZoom: 11, duration: 0,
     });
   }
@@ -338,28 +371,44 @@ export default function DistrictMap() {
 
   function addDecision(measure: DistrictMeasure) {
     if (decisions.length >= (bootstrap?.requiredDecisionCount ?? 5) || decisions.some((item) => item.measureId === measure.id)) return;
-    const decision = measure.scope === "city" ? { measureId: measure.id } : { measureId: measure.id, districtId: selected?.id ?? undefined };
-    if (measure.scope === "district" && !decision.districtId) return;
+    const decision = decisionFromInitiative({ initiativeId: measure.id, districtId: selected?.id ?? "" }, measures);
+    if (!decision) return;
+    calculationId.current += 1;
     setDecisions((current) => [...current, decision]);
-    setResult(null); setCalculationError([]);
+    setResult(null); setCalculationError([]); setCalculating(false);
   }
 
   async function calculate() {
     if (!bootstrap || decisions.length !== bootstrap.requiredDecisionCount) return;
+    const requestId = ++calculationId.current;
     setCalculating(true); setCalculationError([]);
     try {
       const response = await apiPost<SimulationResult>(bootstrap.api.calculate, { decisions });
+      if (requestId !== calculationId.current) return;
       setResult(response);
+      setShowResults(true);
     } catch (error) {
-      if (error instanceof ApiError) setCalculationError(error.fields.length ? error.fields.map((item) => `${item.field}: ${item.message}`) : [error.message]);
+      if (requestId !== calculationId.current) return;
+      if (error instanceof ApiError) setCalculationError(error.fields.length ? error.fields.map((item) => item.message) : [error.message]);
       else setCalculationError([error instanceof Error ? error.message : "Расчёт не выполнен"]);
-    } finally { setCalculating(false); }
+    } finally { if (requestId === calculationId.current) setCalculating(false); }
   }
 
   const selectedStats = stats.find((item) => item.district_id === selected?.id);
   const selectedResult = (result ?? baseline)?.districts.find((item) => item.id === selected?.id);
-  const estimatedCost = decisions.reduce((sum, decision) => sum + (measures.find((item) => item.id === decision.measureId)?.cost ?? 0), 0);
-  const currentScore = result ?? baseline;
+  const selections = selectedDecisions(decisions, measures, districts);
+
+  function removeDecision(measureId: string) {
+    calculationId.current += 1;
+    setDecisions((current) => current.filter((item) => item.measureId !== measureId));
+    setResult(null); setCalculationError([]); setShowResults(false); setCalculating(false);
+  }
+
+  function newScenario() {
+    calculationId.current += 1;
+    setDecisions([]); setResult(null); setCalculationError([]); setShowResults(false); setCalculating(false);
+    clearSelection();
+  }
 
   return (
     <main className="map-screen" aria-label="Карта районов Астаны">
@@ -385,72 +434,30 @@ export default function DistrictMap() {
           </div>
         </details>
       </div>
-      <aside ref={panelRef} className="selection-panel" aria-live="polite">
-        <div className="panel-heading">
-          <div><span className="selection-kicker">АКИМ НА 5 ЧАСОВ</span><h2>{selected?.name ?? "Выберите район"}</h2></div>
-          {selected && <button className="text-button" type="button" onClick={clearSelection}>Сбросить</button>}
+      {(mapError || apiError) && <div className={styles.mapNotice} role="alert">{mapError || apiError}</div>}
+      {selected && selectionPoint && <aside className={styles.selectionCard} aria-live="polite" style={{
+        left: selectionPoint.x, top: selectionPoint.y,
+      }}>
+        <div className={styles.cardHeading}>
+          <div><span className={styles.eyebrow}>РАЙОН АСТАНЫ</span><h2>{selected.name}</h2></div>
+          <button className={styles.closeButton} type="button" onClick={clearSelection} aria-label="Закрыть карточку района">×</button>
         </div>
-        <div className="score-strip">
-          <div><span>Score города</span><strong>{currentScore ? number(currentScore.displayScore, 2) : "—"}</strong></div>
-          <div><span>Изменение</span><strong>{result ? `${result.scoreDelta >= 0 ? "+" : ""}${number(result.scoreDelta, 2)}` : "—"}</strong></div>
-          <div><span>Бюджет</span><strong>{estimatedCost}/{bootstrap?.budgetLimit ?? 100}</strong></div>
-        </div>
-        <div className="panel-tabs" role="tablist" aria-label="Раздел панели">
-          <button role="tab" aria-selected={tab === "district"} onClick={() => setTab("district")}>Район</button>
-          <button role="tab" aria-selected={tab === "scenario"} onClick={() => setTab("scenario")}>Сценарий · {decisions.length}/{bootstrap?.requiredDecisionCount ?? 5}</button>
-        </div>
-        <div className="panel-body">
-          {mapError && <p className="error-message">Карта: {mapError}</p>}
-          {apiError && <p className="error-message">{apiError}. Запустите backend на порту 8080.</p>}
-          {tab === "district" && (
-            selected ? selected.id ? (
-              <>
-                {districtDetail ? <>
-                  <p className="panel-note">Показатели ниже — синтетическая модель хакатона для пяти районов.</p>
-                  <div className="district-facts">
-                    <div><span>Балл района</span><strong>{number(selectedResult?.scoreAfter ?? districtDetail.baselineScore, 2)}</strong></div>
-                    <div><span>Площадь</span><strong>{selectedStats ? `${number(selectedStats.area_km2)} км²` : "—"}</strong></div>
-                    <div><span>Школы в геоданных</span><strong>{typeof selectedStats?.school_count === "number" ? selectedStats.school_count : "нет данных"}</strong></div>
-                    <div><span>Доля зелени</span><strong>{typeof selectedStats?.green_share_pct === "number" ? `${number(selectedStats.green_share_pct)}%` : "нет данных"}</strong></div>
-                  </div>
-                  <h3>Показатели района</h3>
-                  <div className="metric-list">{Object.entries(districtDetail.metrics).map(([code, value]) => (
-                    <div key={code}><span>{metricLabels[code] ?? code}</span><strong>{number(value)}{result && selectedResult ? ` → ${number(selectedResult.after[code])}` : ""}</strong></div>
-                  ))}</div>
-                </> : <p>Загружаются показатели района…</p>}
-                <h3>Мероприятия</h3>
-                <p className="panel-note">Для районных мер цель — {selected.name}; городские действуют во всех пяти районах.</p>
-                <div className="measure-list">{districtMeasures.map((measure) => (
-                  <div className="measure-row" key={measure.id}>
-                    <div><small>{measure.categoryName} · {measure.scope === "city" ? "весь город" : selected.name} · лаг {measure.lagQuarters} кв.</small><strong>{measure.name}</strong><span>{measure.cost} ед. · {Object.entries(measure.realizedEffects).map(([code, amount]) => `${code} ${amount > 0 ? "+" : ""}${number(amount, 2)}`).join(", ")}</span></div>
-                    <button type="button" disabled={decisions.length >= (bootstrap?.requiredDecisionCount ?? 5) || decisions.some((item) => item.measureId === measure.id)} onClick={() => addDecision(measure)} aria-label={`Добавить ${measure.name}`}>+</button>
-                  </div>
-                ))}</div>
-              </>
-            ) : <p>Сарайшык есть на административной карте, но не входит в набор из пяти районов симулятора. Выберите другой район для показателей и мероприятий.</p>
-            : <p>Нажмите на район на карте. Здесь появятся его показатели и доступные мероприятия.</p>
-          )}
-          {tab === "scenario" && <>
-            <p className="panel-note">Выберите ровно {bootstrap?.requiredDecisionCount ?? 5} разных мер. Окончательную проверку бюджета и ограничений выполнит backend.</p>
-            {decisions.length === 0 ? <p>Пока нет решений. Выберите район и добавьте меры из его карточки.</p> : <ol className="decision-list">{decisions.map((decision) => {
-              const measure = measures.find((item) => item.id === decision.measureId);
-              return <li key={decision.measureId}><div><strong>{measure?.name ?? decision.measureId}</strong><span>{decision.districtId ? districts.find((item) => item.id === decision.districtId)?.name ?? decision.districtId : "Весь город"} · {measure?.cost ?? 0} ед.</span></div><button className="text-button" type="button" onClick={() => { setDecisions((current) => current.filter((item) => item.measureId !== decision.measureId)); setResult(null); setCalculationError([]); }} aria-label={`Удалить ${measure?.name ?? decision.measureId}`}>Убрать</button></li>;
-            })}</ol>}
-            <div className="scenario-actions"><button className="primary-button" type="button" disabled={!bootstrap || calculating || decisions.length !== bootstrap.requiredDecisionCount} onClick={() => void calculate()}>{calculating ? "Расчёт…" : "Рассчитать Score"}</button>{decisions.length > 0 && <button className="text-button" type="button" onClick={() => { setDecisions([]); setResult(null); setCalculationError([]); }}>Очистить</button>}</div>
-            {calculationError.length > 0 && <div className="error-message" role="alert">{calculationError.map((message) => <p key={message}>{message}</p>)}</div>}
-            {result && <div className="simulation-result">
-              <h3>Результат: {number(result.displayScore, 2)}</h3>
-              <p>Изменение к базе: {result.scoreDelta >= 0 ? "+" : ""}{number(result.scoreDelta, 2)} · бюджет {result.budget.spent}/{result.budget.limit}</p>
-              <p>Средний балл районов: {number(result.summary.dAvg, 2)} · слабейший район: {result.summary.weakestDistrictName} ({number(result.summary.dMin, 2)}) · критических показателей: {result.summary.nCrit}</p>
-              <h3>Районы после расчёта</h3><div className="metric-list">{result.districts.map((item) => <div key={item.id}><span>{item.name}</span><strong>{number(item.scoreAfter, 2)} ({item.scoreDelta >= 0 ? "+" : ""}{number(item.scoreDelta, 2)})</strong></div>)}</div>
-              <h3>Объяснение</h3><p>{result.explanation.summary}</p>
-              {result.explanation.strengths.length > 0 && <><h4>Сильные стороны</h4><ul>{result.explanation.strengths.map((item) => <li key={item}>{item}</li>)}</ul></>}
-              {result.explanation.risks.length > 0 && <><h4>Риски</h4><ul>{result.explanation.risks.map((item) => <li key={item}>{item}</li>)}</ul></>}
-              {result.synergies.length > 0 && <p>Синергии: {result.synergies.map((item) => `${item.measureIds.join(" + ")} → ${item.metric} +${item.bonus} (${districts.find((district) => district.id === item.districtId)?.name ?? item.districtId})`).join("; ")}</p>}
-            </div>}
-          </>}
-        </div>
-      </aside>
+        {selected.id ? <>
+          <div className={styles.scoreBlock}><span>Score района</span><strong>{districtDetail ? number(selectedResult?.scoreAfter ?? districtDetail.baselineScore, 2) : "—"}</strong></div>
+          <div className={styles.facts}>
+            <div><span>Площадь</span><strong>{selectedStats ? `${number(selectedStats.area_km2)} км²` : "—"}</strong></div>
+            <div><span>Школы</span><strong>{typeof selectedStats?.school_count === "number" ? selectedStats.school_count : "—"}</strong></div>
+            <div><span>Доля зелени</span><strong>{typeof selectedStats?.green_share_pct === "number" ? `${number(selectedStats.green_share_pct)}%` : "—"}</strong></div>
+          </div>
+          <button className={styles.actionButton} type="button" disabled={!bootstrap || !districtDetail || !onOpenInitiatives} onClick={() => {
+            if (bootstrap && selected.id) onOpenInitiatives?.(selected.id, {
+              districtName: selected.name, initiatives: districtMeasures, decisions, measures, bootstrap, onSelectInitiative: addDecision,
+            });
+          }}>Провести мероприятие <span aria-hidden="true">↗</span></button>
+        </> : <p className={styles.unavailable}>Этот район показан на административной карте, но не входит в симулятор.</p>}
+      </aside>}
+      <ScenarioDock selections={selections} requiredCount={bootstrap?.requiredDecisionCount ?? 5} budgetLimit={bootstrap?.budgetLimit ?? 100} calculating={calculating} ready={!!bootstrap} errors={calculationError} onRemove={removeDecision} onCalculate={() => void calculate()} />
+      {result && showResults && <ResultsOverlay result={result} selections={selections} bootstrap={bootstrap} onViewDistricts={() => setShowResults(false)} onNewScenario={newScenario} />}
     </main>
   );
 }
