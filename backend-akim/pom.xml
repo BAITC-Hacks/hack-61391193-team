@@ -81,7 +81,7 @@
                 <directory>src/main/resources</directory>
             </resource>
             <resource>
-                <directory>${project.basedir}/../data/overture/astana</directory>
+                <directory>${project.basedir}/../data1/overture/astana</directory>
                 <targetPath>map-data/astana</targetPath>
                 <filtering>false</filtering>
                 <includes>
