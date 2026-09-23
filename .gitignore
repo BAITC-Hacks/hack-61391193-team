@@ -1,0 +1,43 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+
+# Env / secrets
+.env
+.env.local
+*.pem
+hf_token
+
+# Models & data artifacts (keep sample JSONL + .gitkeep)
+.cache/
+checkpoints/*
+!checkpoints/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+models/*
+!models/.gitkeep
+!models/README.md
+*.pt
+*.safetensors
+*.bin
+*.onnx
+*.gguf
+
+# Notebooks
+notebooks/.ipynb_checkpoints/
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Docker / local volumes
+docker-data/
