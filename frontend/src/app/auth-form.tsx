@@ -2,13 +2,11 @@
 
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { AuthError, login, register } from "./auth-client";
 
 type Mode = "login" | "register";
 
 export default function AuthForm({ mode }: { mode: Mode }) {
-  const router = useRouter();
   const isRegister = mode === "register";
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,8 +34,9 @@ export default function AuthForm({ mode }: { mode: Mode }) {
       } else {
         await login({ email, password });
       }
-      router.replace("/");
-      router.refresh();
+      // Start a fresh request with the session cookie set by the auth route.
+      // Client navigation can reuse a redirect cached before authentication.
+      window.location.replace("/");
     } catch (cause) {
       setError(cause instanceof AuthError ? cause.message : "Что-то пошло не так. Попробуйте снова.");
     } finally {

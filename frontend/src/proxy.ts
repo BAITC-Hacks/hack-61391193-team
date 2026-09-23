@@ -15,7 +15,8 @@ export async function proxy(request: NextRequest) {
       });
       authorized = response.ok;
       invalidToken = response.status === 401 || response.status === 403;
-    } catch {
+    } catch (error) {
+      console.error("Session verification could not reach backend", backendOrigin, error instanceof Error ? error.message : "Unknown error");
       // The simulator must not render before the session can be verified.
     }
   }

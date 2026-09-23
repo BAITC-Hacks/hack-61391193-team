@@ -9,16 +9,13 @@ type Props = { measureId: MeasureId; variant?: "default" | "card" };
 /** Static diorama. Only visible previews own a WebGL context. */
 export default function MeasurePreview({ measureId, variant = "default" }: Props) {
   const host = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false);
+  const [visible, setVisible] = useState(() => typeof IntersectionObserver === "undefined");
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     const element = host.current;
     if (!element) return;
-    if (typeof IntersectionObserver === "undefined") {
-      setVisible(true);
-      return;
-    }
+    if (typeof IntersectionObserver === "undefined") return;
     const observer = new IntersectionObserver(([entry]) => setVisible(entry.isIntersecting), { rootMargin: "80px 0px" });
     observer.observe(element);
     return () => observer.disconnect();
