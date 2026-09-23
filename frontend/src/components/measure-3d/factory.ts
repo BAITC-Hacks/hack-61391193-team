@@ -25,6 +25,7 @@ function sphere(parent: THREE.Group, x: number, y: number, z: number, radius: nu
   const mesh = new THREE.Mesh(new THREE.IcosahedronGeometry(radius, 1), new THREE.MeshStandardMaterial({ color: colors[color], roughness: 0.8 }));
   mesh.position.set(x, y, z);
   parent.add(mesh);
+  return mesh;
 }
 function tree(parent: THREE.Group, x: number, z: number, size = 1) {
   cylinder(parent, x, 0.35 * size, z, 0.07 * size, 0.7 * size, "brown", 6);
@@ -133,8 +134,49 @@ export function createMeasureScene(id: MeasureId): THREE.Group {
       for (const x of [-0.65,0.7]) cylinder(scene,x,0.12,0.5,0.2,0.16,"dark").rotation.x=Math.PI/2;
       box(scene,0.35,0.66,0.49,0.52,0.12,0.03,"red");
       sphere(scene,0,1.2,0,0.2,"yellow"); break;
+    case "M15": {
+      road(scene);
+      for (const z of [-1.04, 1.04]) box(scene, 0, 0.14, z, 3.7, 0.25, 0.22, "white");
+      for (const x of [-1.55, -0.85, 0.2, 1.05]) box(scene, x, 0.075, -0.35, 0.34, 0.04, 0.22, "white");
+      const plow = new THREE.Group();
+      plow.name = "snowplow";
+      scene.add(plow);
+      box(plow, 0, 0.42, 0.18, 1.25, 0.58, 0.65, "yellow");
+      box(plow, 0.2, 0.78, 0.18, 0.56, 0.32, 0.61, "blue");
+      box(plow, -0.72, 0.2, 0.2, 0.18, 0.32, 0.95, "red");
+      for (const x of [-0.42, 0.42]) for (const z of [-0.2, 0.52]) {
+        const wheel = cylinder(plow, x, 0.15, z, 0.16, 0.12, "dark");
+        wheel.rotation.x = Math.PI / 2;
+      }
+      break;
+    }
+    case "M16": {
+      road(scene);
+      box(scene, 0, 0.09, 0.78, 3.7, 0.13, 0.23, "cream");
+      box(scene, 0, 0.035, 0.58, 3.6, 0.025, 0.25, "water");
+      box(scene, 1.18, 0.065, 0.58, 0.65, 0.04, 0.37, "dark");
+      for (const x of [0.95, 1.1, 1.25, 1.4]) box(scene, x, 0.09, 0.58, 0.035, 0.015, 0.32, "white");
+      const flow = new THREE.Group();
+      flow.name = "water-flow";
+      scene.add(flow);
+      for (let index = 0; index < 5; index++) sphere(flow, -1.45 + index * 0.44, 0.1, 0.55, 0.065, "water");
+      box(scene, -1.15, 0.09, -1.07, 0.9, 0.16, 0.23, "cream");
+      break;
+    }
   }
   return scene;
+}
+
+export function animateMeasureScene(group: THREE.Group, id: MeasureId, time: number) {
+  if (id === "M15") {
+    const plow = group.getObjectByName("snowplow");
+    if (plow) plow.position.x = Math.sin(time * 0.0011) * 0.72;
+  } else if (id === "M16") {
+    const flow = group.getObjectByName("water-flow");
+    flow?.children.forEach((drop, index) => {
+      drop.position.x = -1.5 + ((time * 0.00035 + index * 0.19) % 1) * 2.55;
+    });
+  }
 }
 
 export function disposeMeasureScene(group: THREE.Group) {
