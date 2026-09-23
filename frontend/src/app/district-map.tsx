@@ -31,14 +31,49 @@ function getBounds(data: Districts): [[number, number], [number, number]] {
 
 export default function DistrictMap() {
   const containerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<import("maplibre-gl").Map | null>(null);
+  const selectedIdRef = useRef<number | null>(null);
   const [selectedDistrict, setSelectedDistrict] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  function resetSelection() {
+    const map = mapRef.current;
+    const id = selectedIdRef.current;
+    if (map && id !== null) {
+      map.setFeatureState({ source: "districts", id }, { selected: false });
+      map.setFilter("district-selected-outline", ["==", ["get", "objectid"], -1]);
+    }
+    selectedIdRef.current = null;
+    setSelectedDistrict(null);
+  }
 
   useEffect(() => {
     if (!containerRef.current) return;
     let disposed = false;
     let map: import("maplibre-gl").Map | undefined;
+    let districtBounds: [[number, number], [number, number]] | null = null;
     const controller = new AbortController();
+
+    function fitDistricts() {
+      if (!map || !districtBounds || !containerRef.current) return;
+      const { clientWidth: width, clientHeight: height } = containerRef.current;
+      const mobile = width <= 760;
+      map.fitBounds(districtBounds, {
+        padding: mobile
+          ? { top: Math.min(110, height * 0.18), right: 24, bottom: Math.min(230, height * 0.38), left: 24 }
+          : { top: 90, right: 345, bottom: 50, left: 50 },
+        maxZoom: 11,
+        duration: 0,
+      });
+    }
+
+    function resizeMap() {
+      map?.resize();
+      fitDistricts();
+    }
+    window.addEventListener("resize", resizeMap);
+    const observer = new ResizeObserver(resizeMap);
+    observer.observe(containerRef.current);
 
     async function initialize() {
       const maplibregl = await import("maplibre-gl");
@@ -52,6 +87,7 @@ export default function DistrictMap() {
         attributionControl: {},
       });
       map = instance;
+      mapRef.current = instance;
       instance.addControl(new maplibregl.NavigationControl(), "top-right");
 
       instance.on("load", async () => {
@@ -78,18 +114,18 @@ export default function DistrictMap() {
             filter: ["==", ["get", "objectid"], -1],
             paint: { "line-color": "#d85b22", "line-width": 4 },
           });
-          map.fitBounds(getBounds(data), { padding: 44, maxZoom: 11, duration: 0 });
+          districtBounds = getBounds(data);
+          fitDistricts();
 
-          let selectedId: number | null = null;
           map.on("click", "district-fill", (event) => {
             const feature = event.features?.[0];
             const id = feature?.properties?.objectid;
             const name = feature?.properties?.name_object;
             if (typeof id !== "number" || typeof name !== "string" || !map) return;
-            if (selectedId !== null) {
-              map.setFeatureState({ source: "districts", id: selectedId }, { selected: false });
+            if (selectedIdRef.current !== null) {
+              map.setFeatureState({ source: "districts", id: selectedIdRef.current }, { selected: false });
             }
-            selectedId = id;
+            selectedIdRef.current = id;
             map.setFeatureState({ source: "districts", id }, { selected: true });
             map.setFilter("district-selected-outline", ["==", ["get", "objectid"], id]);
             setSelectedDistrict(name);
@@ -112,22 +148,31 @@ export default function DistrictMap() {
     return () => {
       disposed = true;
       controller.abort();
+      observer.disconnect();
+      window.removeEventListener("resize", resizeMap);
       map?.remove();
+      mapRef.current = null;
+      selectedIdRef.current = null;
     };
   }, []);
 
   return (
-    <section className="map-layout" aria-label="Карта районов Астаны">
-      <div className="map-panel">
-        <div ref={containerRef} className="map-container" aria-label="Интерактивная карта" />
-      </div>
+    <main className="map-screen" aria-label="Карта районов Астаны">
+      <div ref={containerRef} className="map-container" aria-label="Интерактивная карта" />
+      <header className="map-brand">
+        <h1>Астана · Районы</h1>
+        <p>Выберите район на карте</p>
+      </header>
       <aside className="selection-panel" aria-live="polite">
-        <span className="selection-kicker">ВЫБРАННЫЙ РАЙОН</span>
+        <div className="selection-topline">
+          <span className="selection-kicker">ВЫБРАННЫЙ РАЙОН</span>
+          {selectedDistrict && <button type="button" onClick={resetSelection}>Сбросить</button>}
+        </div>
         <h2>{selectedDistrict ?? "Выберите район"}</h2>
         <p>{error ?? (selectedDistrict
           ? "Район выделен на карте. Нажмите на другой район, чтобы изменить выбор."
           : "Нажмите на любой район внутри его границ.")}</p>
       </aside>
-    </section>
+    </main>
   );
 }
