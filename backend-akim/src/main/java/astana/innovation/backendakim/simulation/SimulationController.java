@@ -32,7 +32,9 @@ public class SimulationController {
                                     @ExampleObject(name = "Пример v2-saraishyk: 95 единиц → 56.31781049",
                                             value = SimulationRequest.EXAMPLE_JSON),
                                     @ExampleObject(name = "Школа в Сарайшыке: 95 единиц → 54.95216719",
-                                            value = SimulationRequest.SARAISHYK_EXAMPLE_JSON)})))
+                                            value = SimulationRequest.SARAISHYK_EXAMPLE_JSON),
+                                    @ExampleObject(name = "Уборка снега и ливневая канализация: 85 единиц",
+                                            value = SimulationRequest.MUNICIPAL_EXAMPLE_JSON)})))
     @ApiResponse(responseCode = "200", description = "Результат и объяснение",
             content = @Content(schema = @Schema(implementation = SimulationResult.class)))
     @ApiResponse(responseCode = "422", description = "Невалидный набор: errors содержит коды и причины; Score не рассчитывается",

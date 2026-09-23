@@ -1,0 +1,9 @@
+{
+  "decisions": [
+    { "measureId": "M4", "districtId": "esil" },
+    { "measureId": "M7", "districtId": "saraishyk" },
+    { "measureId": "M10", "districtId": "nura" },
+    { "measureId": "M15", "districtId": "nura" },
+    { "measureId": "M16", "districtId": "nura" }
+  ]
+}
