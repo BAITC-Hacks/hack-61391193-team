@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import AuthNav from "./auth-nav";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import InitiativeModal, { type InitiativeSelection } from "./initiative-modal";
 import styles from "./district-map.module.css";
-import { ResultsOverlay, ScenarioDock, decisionFromInitiative, selectedDecisions } from "./scenario-ui";
+import { ResultsOverlay, ScenarioHud, decisionFromInitiative, selectedDecisions } from "./scenario-ui";
 import type { ExpressionSpecification } from "maplibre-gl";
 import type { FeatureCollection, MultiPolygon, Polygon } from "geojson";
 import {
@@ -55,18 +55,9 @@ function scoreColor(score: number): string {
   return "#458e81";
 }
 
-export type InitiativeContext = {
-  districtName: string;
-  initiatives: DistrictMeasure[];
-  decisions: Decision[];
-  measures: Measure[];
-  bootstrap: Bootstrap;
-  onSelectInitiative: (initiative: DistrictMeasure) => void;
-};
-export type DistrictMapProps = { onOpenInitiatives?: (districtId: string, context: InitiativeContext) => void };
-
-export default function DistrictMap({ onOpenInitiatives }: DistrictMapProps) {
+export default function DistrictMap() {
   const mapContainer = useRef<HTMLDivElement>(null);
+  const popupRef = useRef<HTMLElement>(null);
   const mapRef = useRef<Map | null>(null);
   const selectedFeature = useRef<{ source: string; id: string | number } | null>(null);
   const hoveredFeature = useRef<{ source: string; id: string | number } | null>(null);
@@ -87,8 +78,10 @@ export default function DistrictMap({ onOpenInitiatives }: DistrictMapProps) {
   const [cityGeojson, setCityGeojson] = useState<CityBoundary | null>(null);
   const [selected, setSelected] = useState<Selected | null>(null);
   const [selectionPoint, setSelectionPoint] = useState<{ x: number; y: number } | null>(null);
+  const [popupPosition, setPopupPosition] = useState<{ x: number; y: number } | null>(null);
   const [districtDetail, setDistrictDetail] = useState<District | null>(null);
   const [districtMeasures, setDistrictMeasures] = useState<DistrictMeasure[]>([]);
+  const [initiativeDialog, setInitiativeDialog] = useState<{ districtId: string; districtName: string } | null>(null);
   const [boundaryMode, setBoundaryMode] = useState<"administrative" | "model">("administrative");
   const [visibleLayers, setVisibleLayers] = useState<Record<LayerKey, boolean>>({ city: false, parks: false, roads: false, pois: false });
   const [layerLoading, setLayerLoading] = useState<LayerKey | null>(null);
@@ -107,6 +100,7 @@ export default function DistrictMap({ onOpenInitiatives }: DistrictMapProps) {
     }
     selectedFeature.current = null;
     setSelectionPoint(null);
+    setPopupPosition(null);
     setSelected(null);
     setDistrictDetail(null);
     setDistrictMeasures([]);
@@ -120,14 +114,8 @@ export default function DistrictMap({ onOpenInitiatives }: DistrictMapProps) {
     selectedFeature.current = { source, id };
     map.setFeatureState({ source, id }, { selected: true });
     setSelected({ id: districtId, name });
-    const width = mapContainer.current?.clientWidth ?? window.innerWidth;
-    const height = mapContainer.current?.clientHeight ?? window.innerHeight;
-    const cardWidth = 356;
-    const cardHeight = 338;
-    setSelectionPoint({
-      x: Math.max(16, Math.min(point.x + 18, width - cardWidth - 16)),
-      y: Math.max(16, Math.min(point.y + 18, height - cardHeight - 16)),
-    });
+    setPopupPosition(null);
+    setSelectionPoint(point);
     if (!sameFeature) {
       setDistrictDetail(null);
       setDistrictMeasures([]);
@@ -169,7 +157,8 @@ export default function DistrictMap({ onOpenInitiatives }: DistrictMapProps) {
         setModelGeojson(model); setCityGeojson(city);
         setApiError(null);
       } catch (error) {
-        if (!controller.signal.aborted) setApiError(`Бэкенд недоступен: ${error instanceof Error ? error.message : "ошибка запроса"}`);
+        console.error("Failed to load simulator data", error);
+        if (!controller.signal.aborted) setApiError("Сервис временно недоступен");
       }
     }
     void loadApi();
@@ -183,12 +172,58 @@ export default function DistrictMap({ onOpenInitiatives }: DistrictMapProps) {
       apiGet<District>(districtPath(bootstrap.api.districtTemplate, selected.id), controller.signal),
       apiGet<DistrictMeasure[]>(districtPath(bootstrap.api.districtMeasuresTemplate, selected.id), controller.signal),
     ]).then(([detail, available]) => {
-      if (!controller.signal.aborted) { setDistrictDetail(detail); setDistrictMeasures(available); }
+      if (!controller.signal.aborted) { setDistrictDetail(detail); setDistrictMeasures(available); setApiError(null); }
     }).catch((error) => {
-      if (!controller.signal.aborted) setApiError(error instanceof Error ? error.message : "Ошибка загрузки района");
+      console.error("Failed to load district", error);
+      if (!controller.signal.aborted) setApiError("Не удалось загрузить данные района");
     });
     return () => controller.abort();
   }, [selected?.id, bootstrap]);
+
+  useLayoutEffect(() => {
+    if (!selected || !selectionPoint || !popupRef.current || !mapContainer.current) return;
+    const popup = popupRef.current;
+    const container = mapContainer.current;
+    const click = selectionPoint;
+    const occupiedElements = [...document.querySelectorAll<HTMLElement>(".map-brand, .score-hud, .budget-hud, .turns-hud, .map-tools, .maplibregl-ctrl-top-right")];
+    function positionPopup() {
+      if (window.innerWidth <= 760) return;
+      const width = container.clientWidth;
+      const height = container.clientHeight;
+      const cardWidth = popup.offsetWidth;
+      const cardHeight = popup.offsetHeight;
+      const top = 112;
+      const bottom = 126;
+      const left = 24;
+      const right = 24;
+      const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(value, Math.max(min, max)));
+      const obstacles = occupiedElements
+        .filter((element) => element.getClientRects().length > 0)
+        .map((element) => element.getBoundingClientRect());
+      const base = container.getBoundingClientRect();
+      const horizontal = [click.x + 18, click.x - cardWidth - 18, left, width - right - cardWidth,
+        ...obstacles.flatMap((obstacle) => [obstacle.right - base.left + 12, obstacle.left - base.left - cardWidth - 12])];
+      const vertical = [click.y + 18, click.y - cardHeight - 18, top, height - bottom - cardHeight,
+        ...obstacles.flatMap((obstacle) => [obstacle.bottom - base.top + 12, obstacle.top - base.top - cardHeight - 12])];
+      const choices = horizontal.flatMap((x) => vertical.map((y) => ({
+          x: clamp(x, left, width - right - cardWidth),
+          y: clamp(y, top, height - bottom - cardHeight),
+        })));
+      const scored = choices.map((choice) => {
+        const rect = { left: base.left + choice.x, right: base.left + choice.x + cardWidth, top: base.top + choice.y, bottom: base.top + choice.y + cardHeight };
+        const overlap = obstacles.reduce((sum, obstacle) => sum + Math.max(0, Math.min(rect.right, obstacle.right) - Math.max(rect.left, obstacle.left)) * Math.max(0, Math.min(rect.bottom, obstacle.bottom) - Math.max(rect.top, obstacle.top)), 0);
+        return { ...choice, score: overlap * 10 + Math.abs(choice.x - click.x) + Math.abs(choice.y - click.y) };
+      });
+      scored.sort((a, b) => a.score - b.score);
+      setPopupPosition({ x: scored[0].x, y: scored[0].y });
+    }
+    positionPopup();
+    const observer = new ResizeObserver(positionPopup);
+    observer.observe(popup);
+    occupiedElements.forEach((element) => observer.observe(element));
+    window.addEventListener("resize", positionPopup);
+    return () => { observer.disconnect(); window.removeEventListener("resize", positionPopup); };
+  }, [selected, selectionPoint]);
 
   useEffect(() => {
     if (!mapContainer.current) return;
@@ -201,8 +236,8 @@ export default function DistrictMap({ onOpenInitiatives }: DistrictMapProps) {
       const height = mapContainer.current.clientHeight;
       map.fitBounds(boundsRef.current, {
         padding: width <= 760
-          ? { top: 110, right: 22, bottom: Math.min(height * 0.46, 330), left: 22 }
-          : { top: 95, right: 56, bottom: 260, left: 56 },
+          ? { top: 110, right: 22, bottom: Math.min(height * 0.28, 180), left: 22 }
+          : { top: 95, right: 56, bottom: 140, left: 56 },
         maxZoom: 11, duration: 0,
       });
     }
@@ -250,7 +285,8 @@ export default function DistrictMap({ onOpenInitiatives }: DistrictMapProps) {
           });
           setMapReady(true);
         } catch (error) {
-          if (!disposed) setMapError(error instanceof Error ? error.message : "Не удалось загрузить границы");
+          console.error("Failed to load map boundaries", error);
+          if (!disposed) setMapError("Не удалось загрузить карту");
         }
       });
     }
@@ -321,8 +357,8 @@ export default function DistrictMap({ onOpenInitiatives }: DistrictMapProps) {
     const size = mapContainer.current;
     if (size && boundsRef.current) map.fitBounds(boundsRef.current, {
       padding: size.clientWidth <= 760
-        ? { top: 110, right: 22, bottom: Math.min(size.clientHeight * 0.46, 330), left: 22 }
-        : { top: 95, right: 56, bottom: 260, left: 56 },
+        ? { top: 110, right: 22, bottom: Math.min(size.clientHeight * 0.28, 180), left: 22 }
+        : { top: 95, right: 56, bottom: 140, left: 56 },
       maxZoom: 11, duration: 0,
     });
   }
@@ -352,7 +388,8 @@ export default function DistrictMap({ onOpenInitiatives }: DistrictMapProps) {
         }
         loadedLayers.current.add(layer);
       } catch (error) {
-        setApiError(error instanceof Error ? error.message : "Ошибка загрузки слоя");
+        console.error("Failed to load map layer", layer, error);
+        setApiError("Сервис временно недоступен");
         setLayerLoading(null);
         return;
       }
@@ -369,9 +406,13 @@ export default function DistrictMap({ onOpenInitiatives }: DistrictMapProps) {
     if (map?.getLayer("pois-circle")) map.setFilter("pois-circle", ["==", ["get", "kind"], kind]);
   }
 
-  function addDecision(measure: DistrictMeasure) {
+  const closeInitiativeDialog = useCallback(() => setInitiativeDialog(null), []);
+
+  function addDecision(selection: InitiativeSelection) {
+    const measure = districtMeasures.find((item) => item.id === selection.initiativeId);
+    if (!measure || selection.districtId !== selected?.id) return;
     if (decisions.length >= (bootstrap?.requiredDecisionCount ?? 5) || decisions.some((item) => item.measureId === measure.id)) return;
-    const decision = decisionFromInitiative({ initiativeId: measure.id, districtId: selected?.id ?? "" }, measures);
+    const decision = decisionFromInitiative(selection, measures);
     if (!decision) return;
     calculationId.current += 1;
     setDecisions((current) => [...current, decision]);
@@ -389,8 +430,9 @@ export default function DistrictMap({ onOpenInitiatives }: DistrictMapProps) {
       setShowResults(true);
     } catch (error) {
       if (requestId !== calculationId.current) return;
-      if (error instanceof ApiError) setCalculationError(error.fields.length ? error.fields.map((item) => item.message) : [error.message]);
-      else setCalculationError([error instanceof Error ? error.message : "Расчёт не выполнен"]);
+      console.error("Failed to calculate scenario", error);
+      if (error instanceof ApiError) setCalculationError(error.fields.length ? error.fields.map((item) => item.message) : [error.status < 500 ? error.message : "Сервис временно недоступен"]);
+      else setCalculationError(["Сервис временно недоступен"]);
     } finally { if (requestId === calculationId.current) setCalculating(false); }
   }
 
@@ -414,10 +456,10 @@ export default function DistrictMap({ onOpenInitiatives }: DistrictMapProps) {
     <main className="map-screen" aria-label="Карта районов Астаны">
       <div ref={mapContainer} className="map-container" aria-label="Интерактивная карта" />
       <header className="map-brand">
-        <h1>Астана · Районы</h1>
-        <p>Выберите район на карте</p>
-        <AuthNav />
+        <h1>Аким на 5 часов</h1>
+        <p>Астана</p>
       </header>
+      <section className="score-hud floating-hud" aria-label="Score города"><span className="hud-label">Score города</span><strong>{baseline || bootstrap ? number((result ?? baseline)?.displayScore ?? bootstrap?.baselineScore ?? 0, 2) : "—"}</strong></section>
       <div className="map-tools">
         <details>
           <summary>Слои карты</summary>
@@ -435,8 +477,8 @@ export default function DistrictMap({ onOpenInitiatives }: DistrictMapProps) {
         </details>
       </div>
       {(mapError || apiError) && <div className={styles.mapNotice} role="alert">{mapError || apiError}</div>}
-      {selected && selectionPoint && <aside className={styles.selectionCard} aria-live="polite" style={{
-        left: selectionPoint.x, top: selectionPoint.y,
+      {selected && selectionPoint && <aside ref={popupRef} className={styles.selectionCard} aria-live="polite" style={{
+        left: popupPosition?.x ?? 0, top: popupPosition?.y ?? 0, visibility: popupPosition ? "visible" : "hidden",
       }}>
         <div className={styles.cardHeading}>
           <div><span className={styles.eyebrow}>РАЙОН АСТАНЫ</span><h2>{selected.name}</h2></div>
@@ -449,14 +491,23 @@ export default function DistrictMap({ onOpenInitiatives }: DistrictMapProps) {
             <div><span>Школы</span><strong>{typeof selectedStats?.school_count === "number" ? selectedStats.school_count : "—"}</strong></div>
             <div><span>Доля зелени</span><strong>{typeof selectedStats?.green_share_pct === "number" ? `${number(selectedStats.green_share_pct)}%` : "—"}</strong></div>
           </div>
-          <button className={styles.actionButton} type="button" disabled={!bootstrap || !districtDetail || !onOpenInitiatives} onClick={() => {
-            if (bootstrap && selected.id) onOpenInitiatives?.(selected.id, {
-              districtName: selected.name, initiatives: districtMeasures, decisions, measures, bootstrap, onSelectInitiative: addDecision,
-            });
-          }}>Провести мероприятие <span aria-hidden="true">↗</span></button>
+          <button className={styles.actionButton} type="button" disabled={!bootstrap || !districtDetail} onClick={() => {
+            if (selected.id) setInitiativeDialog({ districtId: selected.id, districtName: selected.name });
+          }}>{districtDetail ? "Провести мероприятие" : apiError ? "Мероприятия недоступны" : "Загрузка мероприятий…"} <span aria-hidden="true">↗</span></button>
         </> : <p className={styles.unavailable}>Этот район показан на административной карте, но не входит в симулятор.</p>}
       </aside>}
-      <ScenarioDock selections={selections} requiredCount={bootstrap?.requiredDecisionCount ?? 5} budgetLimit={bootstrap?.budgetLimit ?? 100} calculating={calculating} ready={!!bootstrap} errors={calculationError} onRemove={removeDecision} onCalculate={() => void calculate()} />
+      <ScenarioHud selections={selections} requiredCount={bootstrap?.requiredDecisionCount ?? 5} budgetLimit={bootstrap?.budgetLimit ?? 100} calculating={calculating} ready={!!bootstrap} errors={calculationError} onRemove={removeDecision} onCalculate={() => void calculate()} />
+      {bootstrap && initiativeDialog && <InitiativeModal
+        open
+        districtId={initiativeDialog.districtId}
+        districtName={initiativeDialog.districtName}
+        initiatives={districtMeasures}
+        decisions={decisions}
+        allMeasures={measures}
+        rules={bootstrap}
+        onSelectInitiative={addDecision}
+        onClose={closeInitiativeDialog}
+      />}
       {result && showResults && <ResultsOverlay result={result} selections={selections} bootstrap={bootstrap} onViewDistricts={() => setShowResults(false)} onNewScenario={newScenario} />}
     </main>
   );

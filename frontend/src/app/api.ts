@@ -83,11 +83,28 @@ export async function apiPost<T>(path: string, body: unknown): Promise<T> {
 }
 
 async function parseResponse<T>(response: Response): Promise<T> {
-  const data = await response.json();
-  if (!response.ok) {
-    const fields = Array.isArray(data.errors) ? data.errors : [];
-    throw new ApiError(response.status, fields, data.detail || data.title || `HTTP ${response.status}`);
+  const contentType = response.headers.get("content-type") ?? "";
+  const isJson = /\bjson\b|\+json\b/i.test(contentType);
+  const raw = await response.text();
+  let data: unknown = null;
+  if (isJson && raw) {
+    try { data = JSON.parse(raw); }
+    catch { console.error("Invalid API JSON:", response.status, raw); }
+  } else if (raw && !response.ok) {
+    console.error("API error:", response.status, raw);
   }
+  if (!response.ok) {
+    if (response.status === 401) {
+      await fetch("/api/session/logout", { method: "POST", credentials: "same-origin" }).catch(() => null);
+      window.location.replace("/login");
+    }
+    const payload = data && typeof data === "object" ? data as Record<string, unknown> : {};
+    const fields = Array.isArray(payload.errors) ? payload.errors.filter((item): item is { field: string; message: string } =>
+      !!item && typeof item === "object" && typeof item.field === "string" && typeof item.message === "string") : [];
+    const message = response.status === 422 && typeof payload.detail === "string" ? payload.detail : "Сервис временно недоступен";
+    throw new ApiError(response.status, fields, message);
+  }
+  if (!isJson || data === null) throw new ApiError(response.status, [], "Сервис временно недоступен");
   return data as T;
 }
 

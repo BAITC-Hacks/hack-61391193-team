@@ -50,7 +50,7 @@ export function selectedDecisions(decisions: Decision[], measures: Measure[], di
   }));
 }
 
-type DockProps = {
+type HudProps = {
   selections: ScenarioSelection[];
   requiredCount: number;
   budgetLimit: number;
@@ -61,23 +61,22 @@ type DockProps = {
   onCalculate: () => void;
 };
 
-export function ScenarioDock({ selections, requiredCount, budgetLimit, calculating, ready, errors, onRemove, onCalculate }: DockProps) {
+export function ScenarioHud({ selections, requiredCount, budgetLimit, calculating, ready, errors, onRemove, onCalculate }: HudProps) {
   const spent = selections.reduce((sum, selection) => sum + (selection.measure?.cost ?? 0), 0);
   const missing = Math.max(0, requiredCount - selections.length);
-  return <section className="scenario-dock" aria-label="Сценарий">
-    <div className="scenario-dock-heading"><span className="selection-kicker">ВАШ ВЫБОР</span><h2>Сценарий</h2></div>
-    {selections.length ? <ol className="scenario-dock-list">{selections.map(({ decision, measure, district }, index) =>
-      <li key={decision.measureId}>
-        <span className="scenario-dock-index">{index + 1}</span>
-        <span className="scenario-dock-item"><strong>{measure?.name ?? decision.measureId}</strong><small>{district} · {measure?.cost ?? 0} ед.</small></span>
-        <button type="button" className="scenario-remove" onClick={() => onRemove(decision.measureId)} aria-label={`Удалить ${measure?.name ?? decision.measureId}`}>×</button>
-      </li>)}</ol> : <p className="scenario-dock-empty">Выберите район и добавьте первое мероприятие.</p>}
-    <div className="scenario-dock-stats"><span><strong>{selections.length} / {requiredCount}</strong> решений</span><span><strong>{spent} / {budgetLimit}</strong> бюджета</span></div>
-    <button className="primary-button scenario-dock-cta" type="button" disabled={!ready || calculating || missing > 0} onClick={onCalculate}>
-      {calculating ? "Расчёт…" : missing > 0 ? `Выберите ещё ${missing} ${missing === 1 ? "решение" : "решения"}` : "Рассчитать результат"}
-    </button>
-    {errors.length > 0 && <div className="error-message scenario-dock-error" role="alert">{errors.map((error, index) => <p key={`${index}-${error}`}>{error}</p>)}</div>}
-  </section>;
+  return <>
+    <section className="budget-hud floating-hud" aria-label="Бюджет">
+      <span className="hud-label">Бюджет</span>
+      <div className="budget-hud-numbers"><strong>{spent} <small>/ {budgetLimit}</small></strong><span>Осталось <b>{budgetLimit - spent}</b></span></div>
+      <div className="budget-track" role="progressbar" aria-label="Потрачено бюджета" aria-valuenow={spent} aria-valuemin={0} aria-valuemax={budgetLimit}><span style={{ width: `${budgetLimit ? Math.min(100, spent / budgetLimit * 100) : 0}%` }} /></div>
+    </section>
+    <section className="turns-hud floating-hud" aria-label="Ходы">
+      <div className="turns-progress"><div className="turn-dots" aria-hidden="true">{Array.from({ length: requiredCount }, (_, index) => <span className={index < selections.length ? "turn-dot active" : "turn-dot"} key={index} />)}</div><strong>Ходы {selections.length} / {requiredCount}</strong></div>
+      {selections.length > 0 && <details className="turns-list"><summary>Мероприятия</summary><ol>{selections.map(({ decision, measure, district }) => <li key={decision.measureId}><span>{measure?.name ?? decision.measureId}<small>{district}</small></span><button type="button" onClick={() => onRemove(decision.measureId)} aria-label={`Удалить ${measure?.name ?? decision.measureId}`}>×</button></li>)}</ol></details>}
+      <div className="turns-action"><button className="primary-button" type="button" disabled={!ready || calculating || missing > 0 || spent > budgetLimit} onClick={onCalculate}>{calculating ? "Подсчитываем…" : "Подвести итог"}</button>{missing > 0 && <span>Осталось {missing} {missing === 1 ? "ход" : missing < 5 ? "хода" : "ходов"}</span>}</div>
+      {errors.length > 0 && <div className="error-message turns-error" role="alert">{errors.map((error, index) => <p key={`${index}-${error}`}>{error}</p>)}</div>}
+    </section>
+  </>;
 }
 
 type ResultsProps = {

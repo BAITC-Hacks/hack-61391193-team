@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import MeasurePreview from "../components/measure-3d/MeasurePreview";
+import { isMeasureId } from "../components/measure-3d/catalog";
 import type { Bootstrap, Decision, DistrictMeasure, Measure } from "./api";
 import styles from "./initiative-modal.module.css";
 
@@ -14,8 +16,6 @@ type Props = {
   decisions: Decision[];
   allMeasures: Measure[];
   rules: Pick<Bootstrap, "budgetLimit" | "requiredDecisionCount" | "maxMeasuresPerCategory" | "horizonQuarters" | "scoreRules">;
-  /** Pass the project's existing Three.js preview here; the viewport owns its size. */
-  renderPreview: (initiative: DistrictMeasure) => ReactNode;
   onSelectInitiative: (selection: InitiativeSelection) => void | Promise<void>;
   onClose: () => void;
   /** Extra restrictions from the scenario validator, if any. Return a readable reason. */
@@ -29,7 +29,7 @@ function formatEffect(value: number) {
   return `${value > 0 ? "+" : ""}${amount}`;
 }
 
-export default function InitiativeModal({ open, districtId, districtName, initiatives, decisions, allMeasures, rules, renderPreview, onSelectInitiative, onClose, getUnavailableReason }: Props) {
+export default function InitiativeModal({ open, districtId, districtName, initiatives, decisions, allMeasures, rules, onSelectInitiative, onClose, getUnavailableReason }: Props) {
   const [filter, setFilter] = useState<string>("Все");
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -121,18 +121,22 @@ export default function InitiativeModal({ open, districtId, districtName, initia
               const reason = unavailableReason(initiative);
               const isPending = pendingId === initiative.id;
               const isSelected = decisions.some((decision) => decision.measureId === initiative.id);
-              return <article className={`${styles.card} ${reason ? styles.cardDisabled : ""} ${isSelected ? styles.cardSelected : ""}`} key={initiative.id}>
-                <div className={styles.preview} aria-label={`3D-превью: ${initiative.name}`}>{renderPreview(initiative)}<span className={styles.scope}>{initiative.scope === "city" ? "Весь город" : districtName}</span></div>
+              return <article className={`${styles.card} ${reason && !isSelected ? styles.cardDisabled : ""} ${isSelected ? styles.cardSelected : ""}`} key={initiative.id}>
+                <div className={styles.preview}>
+                  {isMeasureId(initiative.id) ? <MeasurePreview measureId={initiative.id} variant="card" /> : <div className={styles.previewFallback}>3D-просмотр недоступен</div>}
+                  <span className={styles.scope}>{initiative.scope === "city" ? "Весь город" : "Район"}</span>
+                </div>
                 <div className={styles.cardBody}>
-                  <div className={styles.meta}><span>{initiative.categoryName}</span><span>Лаг {initiative.lagQuarters} кв.</span></div>
+                  <div className={styles.meta}><span className={styles.category}>{initiative.categoryName}</span><span className={styles.lag}>Лаг: {initiative.lagQuarters} кв.</span></div>
                   <h3>{initiative.name}</h3>
-                  <div className={styles.cost}><strong>{initiative.cost}</strong><span>ед.</span></div>
+                  <div className={styles.cost}><strong>{initiative.cost}</strong><span>ед. бюджета</span></div>
                   <div className={styles.effects} aria-label={`Эффект за ${rules.horizonQuarters} кварталов`}>
-                    <span className={styles.effectsTitle}>ЭФФЕКТ ЗА {rules.horizonQuarters} КВ.</span>
-                    <div>{Object.entries(initiative.realizedEffects).filter(([, value]) => value !== 0).map(([code, value]) => <span className={styles.effect} key={code}><b>{code}</b> {formatEffect(value)}</span>)}</div>
+                    <span className={styles.effectsTitle}>Эффект за {rules.horizonQuarters} кв.</span>
+                    <div>{Object.entries(initiative.realizedEffects).filter(([, value]) => value !== 0).map(([code, value]) => <span className={`${styles.effect} ${value < 0 ? styles.effectNegative : ""}`} key={code}><b>{code}</b> {formatEffect(value)}</span>)}</div>
                   </div>
-                  <button className={styles.select} type="button" disabled={Boolean(reason) || Boolean(pendingId)} onClick={() => void select(initiative)} aria-label={reason ? `${initiative.name}: ${reason}` : `Выбрать ${initiative.name}`}>
-                    {isPending ? "Добавляем…" : reason ?? "Выбрать"}<span aria-hidden="true">{reason || isPending ? "" : "↗"}</span>
+                  {reason && !isSelected && <p className={styles.reason}>{reason}</p>}
+                  <button className={`${styles.select} ${isSelected ? styles.selectSelected : ""}`} type="button" disabled={Boolean(reason) || Boolean(pendingId)} onClick={() => void select(initiative)} aria-label={isSelected ? `${initiative.name}: выбрано` : reason ? `${initiative.name}: ${reason}` : `Выбрать ${initiative.name}`} title={reason ?? undefined}>
+                    {isPending ? "Добавляем…" : isSelected ? "✓ Выбрано" : "Выбрать"}<span aria-hidden="true">{reason || isPending ? "" : "↗"}</span>
                   </button>
                 </div>
               </article>;

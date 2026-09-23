@@ -15,10 +15,18 @@ export class AuthError extends Error {
 }
 
 async function readResponse<T>(response: Response): Promise<T> {
-  const data = await response.json().catch(() => null);
+  const isJson = /\bjson\b|\+json\b/i.test(response.headers.get("content-type") ?? "");
+  const raw = await response.text();
+  let data: unknown = null;
+  if (isJson && raw) {
+    try { data = JSON.parse(raw); }
+    catch { console.error("Invalid auth response:", response.status, raw); }
+  } else if (raw && !response.ok) {
+    console.error("Auth request failed:", response.status, raw);
+  }
   if (!response.ok) {
     const detail = data && typeof data === "object" && "detail" in data && typeof data.detail === "string"
-      ? data.detail : null;
+      && response.status < 500 ? data.detail : null;
     const fallback = response.status === 401 ? "Неверный адрес почты или пароль."
       : response.status === 409 ? "Этот адрес почты уже зарегистрирован."
       : response.status === 503 ? "Авторизация недоступна. Проверьте, что backend запущен с PostgreSQL."
