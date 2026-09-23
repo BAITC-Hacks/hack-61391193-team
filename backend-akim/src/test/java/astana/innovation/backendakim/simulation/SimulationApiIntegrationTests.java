@@ -1,0 +1,132 @@
+package astana.innovation.backendakim.simulation;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+
+import java.util.stream.Stream;
+
+import static org.hamcrest.Matchers.hasItem;
+import static org.hamcrest.Matchers.hasSize;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+@SpringBootTest
+@AutoConfigureMockMvc
+class SimulationApiIntegrationTests {
+    @Autowired private MockMvc mvc;
+
+    @Test
+    void calculatesThroughBothRoutes() throws Exception {
+        for (String path : new String[]{"/api/simulation/calculate", "/api/v1/simulation/calculate"}) {
+            mvc.perform(post(path).contentType(MediaType.APPLICATION_JSON).content(SimulationRequest.EXAMPLE_JSON))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.finalScore").value(56.54307))
+                    .andExpect(jsonPath("$.baselineScore").value(52.55768))
+                    .andExpect(jsonPath("$.scoreDelta").value(3.98539))
+                    .andExpect(jsonPath("$.summary.nCrit").value(0))
+                    .andExpect(jsonPath("$.districts", hasSize(5)))
+                    .andExpect(jsonPath("$.measureEffects", hasSize(5)))
+                    .andExpect(jsonPath("$.explanation.source").value("template"));
+        }
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("invalidScenarios")
+    void rejectsInvalidScenariosWithoutScore(String code, String json) throws Exception {
+        mvc.perform(post("/api/simulation/calculate").contentType(MediaType.APPLICATION_JSON).content(json))
+                .andExpect(status().is(422))
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.errors[*].code", hasItem(code)))
+                .andExpect(jsonPath("$.finalScore").doesNotExist())
+                .andExpect(jsonPath("$.summary").doesNotExist());
+    }
+
+    static Stream<Arguments> invalidScenarios() {
+        String example = SimulationRequest.EXAMPLE_JSON;
+        return Stream.of(
+                Arguments.of("DECISION_COUNT", "{}"),
+                Arguments.of("DECISION_COUNT", "{\"decisions\":null}"),
+                Arguments.of("DECISION_COUNT", "{\"decisions\":[]}"),
+                Arguments.of("DECISION_COUNT", "{\"decisions\":[null,null,null,null]}"),
+                Arguments.of("DECISION_COUNT", "{\"decisions\":[null,null,null,null,null,null]}"),
+                Arguments.of("MEASURE_REQUIRED", example.replace("{\"measureId\":\"M7\",\"districtId\":\"nura\"}", "null")),
+                Arguments.of("MEASURE_REQUIRED", example.replace("\"measureId\":\"M7\"", "\"measureId\":null")),
+                Arguments.of("MEASURE_REQUIRED", example.replace("\"M7\"", "\"\"")),
+                Arguments.of("UNKNOWN_MEASURE", example.replace("\"M7\"", "\"M99\"")),
+                Arguments.of("DISTRICT_REQUIRED", example.replace("\"districtId\":\"nura\"", "\"districtId\":null")),
+                Arguments.of("DISTRICT_REQUIRED", example.replace("\"nura\"", "\"\"")),
+                Arguments.of("UNKNOWN_DISTRICT", example.replace("\"nura\"", "\"unknown\"")),
+                Arguments.of("CITY_DISTRICT_FORBIDDEN", example.replace("{\"measureId\":\"M12\"}", "{\"measureId\":\"M12\",\"districtId\":\"nura\"}")),
+                Arguments.of("DUPLICATE_MEASURE", example.replace("\"M8\"", "\"M7\"")),
+                Arguments.of("BUDGET_EXCEEDED", example.replace("\"M10\"", "\"M3\"")),
+                Arguments.of("CATEGORY_LIMIT", example.replace("\"M10\"", "\"M9\"")),
+                Arguments.of("CONFLICT", scenario("M1:nura", "M3:esil", "M9:nura", "M10:nura", "M12")),
+                Arguments.of("CONFLICT", scenario("M4:nura", "M7:nura", "M9:nura", "M10:nura", "M12")),
+                Arguments.of("CONFLICT", scenario("M5:nura", "M13:nura", "M9:nura", "M10:nura", "M12")));
+    }
+
+    @ParameterizedTest
+    @MethodSource("validScenarios")
+    void allowsValidBoundaryScenarios(String json, int budget) throws Exception {
+        mvc.perform(post("/api/simulation/calculate").contentType(MediaType.APPLICATION_JSON).content(json))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.budget.spent").value(budget));
+    }
+
+    static Stream<Arguments> validScenarios() {
+        return Stream.of(
+                Arguments.of(scenario("M4:esil", "M7:nura", "M9:nura", "M10:nura", "M12"), 75),
+                Arguments.of(scenario("M5:saryarka", "M13:almaty", "M9:nura", "M10:nura", "M12"), 89),
+                Arguments.of(scenario("M9:nura", "M11:nura", "M10:nura", "M12", "M4:saryarka"), 61));
+    }
+
+    @Test
+    void acceptsBudgetExactlyOneHundred() throws Exception {
+        mvc.perform(post("/api/simulation/calculate").contentType(MediaType.APPLICATION_JSON)
+                        .content(scenario("M1:nura", "M2", "M7:nura", "M8:nura", "M14")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.budget.spent").value(100))
+                .andExpect(jsonPath("$.budget.remaining").value(0));
+    }
+
+    @Test
+    void malformedJsonIsBadRequest() throws Exception {
+        for (String json : new String[]{"{", "null", "{\"decisions\":\"wrong\"}", "{\"decisions\":[1,2,3,4,5]}"}) {
+            mvc.perform(post("/api/simulation/calculate").contentType(MediaType.APPLICATION_JSON).content(json))
+                    .andExpect(status().isBadRequest()).andExpect(jsonPath("$.finalScore").doesNotExist());
+        }
+    }
+
+    @Test
+    void exposesBaselineSwaggerAndMachineReadableOpenApiWithExample() throws Exception {
+        mvc.perform(get("/api/simulation/baseline")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.finalScore").value(52.55768)).andExpect(jsonPath("$.summary.nCrit").value(2));
+        mvc.perform(get("/v3/api-docs")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.openapi").exists())
+                .andExpect(jsonPath("$.paths['/api/simulation/calculate'].post.responses['422']").exists())
+                .andExpect(jsonPath("$.paths['/api/simulation/calculate'].post.requestBody.content['application/json'].examples").exists())
+                .andExpect(jsonPath("$.components.schemas.SimulationResult.properties.finalScore").exists());
+        mvc.perform(get("/v3/api-docs.yaml")).andExpect(status().isOk());
+        mvc.perform(get("/swagger-ui.html")).andExpect(status().is3xxRedirection());
+        mvc.perform(get("/swagger-ui/index.html")).andExpect(status().isOk());
+    }
+
+    @Test
+    void allowsFrontendPostPreflight() throws Exception {
+        mvc.perform(options("/api/simulation/calculate").header("Origin", "http://localhost:5173")
+                        .header("Access-Control-Request-Method", "POST").header("Access-Control-Request-Headers", "content-type"))
+                .andExpect(status().isOk()).andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:5173"));
+    }
+
+    private static String scenario(String... selections) {
+        return "{\"decisions\":[" + Stream.of(selections).map(selection -> {
+            String[] parts = selection.split(":");
+            return "{\"measureId\":\"" + parts[0] + "\"" + (parts.length == 2 ? ",\"districtId\":\"" + parts[1] + "\"" : "") + "}";
+        }).collect(java.util.stream.Collectors.joining(",")) + "]}";
+    }
+}

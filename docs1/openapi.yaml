@@ -1,0 +1,803 @@
+openapi: 3.1.0
+info:
+  title: Аким на 5 часов — Astana Quality of Life Score
+  description: "Синтетическая модель хакатона: выберите ровно 5 мероприятий на бюд\
+    жет до 100. Расчёт детерминированный, объяснение формируется без внешнего LLM.\
+    \ Откройте POST /api/simulation/calculate, нажмите Try it out и Execute: приме\
+    р уже заполнен. Score примера = 56.54307, базовый = 52.55768."
+  version: v1
+servers:
+- url: http://localhost:8080
+  description: Generated server url
+tags:
+- name: Simulation
+  description: Расчёт Astana Quality of Life Score и объяснение результата
+paths:
+  /api/simulation/calculate:
+    post:
+      tags:
+      - Simulation
+      summary: Рассчитать Score для 5 мероприятий
+      description: "Проверяет бюджет, повторы, лимит направления, районы и конфлик\
+        ты. Применяет lag, synergy и clip, возвращает точные числа и объяснение бе\
+        з LLM."
+      operationId: calculate
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SimulationRequest"
+            examples:
+              'Пример из датасета: 95 единиц → 56.54307':
+                description: "Пример из датасета: 95 единиц → 56.54307"
+                value:
+                  decisions:
+                  - measureId: M7
+                    districtId: nura
+                  - measureId: M8
+                    districtId: nura
+                  - measureId: M10
+                    districtId: nura
+                  - measureId: M12
+                  - measureId: M5
+                    districtId: saryarka
+        required: true
+      responses:
+        "200":
+          description: Результат и объяснение
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SimulationResult"
+        "422":
+          description: "Невалидный набор: errors содержит коды и причины; Score не\
+            \ рассчитывается"
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ValidationProblem"
+        "400":
+          description: Некорректный JSON или отсутствует тело
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+  /api/v1/simulation/calculate:
+    post:
+      tags:
+      - Simulation
+      summary: Рассчитать Score для 5 мероприятий
+      description: "Проверяет бюджет, повторы, лимит направления, районы и конфлик\
+        ты. Применяет lag, synergy и clip, возвращает точные числа и объяснение бе\
+        з LLM."
+      operationId: calculate_1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SimulationRequest"
+            examples:
+              'Пример из датасета: 95 единиц → 56.54307':
+                description: "Пример из датасета: 95 единиц → 56.54307"
+                value:
+                  decisions:
+                  - measureId: M7
+                    districtId: nura
+                  - measureId: M8
+                    districtId: nura
+                  - measureId: M10
+                    districtId: nura
+                  - measureId: M12
+                  - measureId: M5
+                    districtId: saryarka
+        required: true
+      responses:
+        "200":
+          description: Результат и объяснение
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SimulationResult"
+        "422":
+          description: "Невалидный набор: errors содержит коды и причины; Score не\
+            \ рассчитывается"
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ValidationProblem"
+        "400":
+          description: Некорректный JSON или отсутствует тело
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+  /api/v1/simulation/bootstrap:
+    get:
+      tags:
+      - simulation-bootstrap-controller
+      operationId: bootstrap
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/BootstrapResponse"
+  /api/v1/simulation/baseline:
+    get:
+      tags:
+      - Simulation
+      summary: Базовые показатели и Score без действий
+      description: "Score = 52.55768. Это справочный расчёт, не сценарий из 5 реше\
+        ний."
+      operationId: baseline
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SimulationResult"
+  /api/simulation/baseline:
+    get:
+      tags:
+      - Simulation
+      summary: Базовые показатели и Score без действий
+      description: "Score = 52.55768. Это справочный расчёт, не сценарий из 5 реше\
+        ний."
+      operationId: baseline_1
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SimulationResult"
+  /api/v1/measures:
+    get:
+      tags:
+      - catalog-controller
+      operationId: getMeasures
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MeasureResponse"
+  /api/v1/map/roads:
+    get:
+      tags:
+      - map-data-controller
+      operationId: getRoads
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: string
+                format: byte
+  /api/v1/map/pois:
+    get:
+      tags:
+      - map-data-controller
+      operationId: getPois
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: string
+                format: byte
+  /api/v1/map/parks:
+    get:
+      tags:
+      - map-data-controller
+      operationId: getParks
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: string
+                format: byte
+  /api/v1/map/layers:
+    get:
+      tags:
+      - map-data-controller
+      operationId: getLayers
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/MapLayersResponse"
+  /api/v1/map/districts:
+    get:
+      tags:
+      - map-data-controller
+      operationId: getDistricts
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: string
+                format: byte
+  /api/v1/map/district-stats:
+    get:
+      tags:
+      - map-data-controller
+      operationId: getDistrictStats
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: string
+                format: byte
+  /api/v1/map/city-boundary:
+    get:
+      tags:
+      - map-data-controller
+      operationId: getCityBoundary
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: string
+                format: byte
+  /api/v1/districts:
+    get:
+      tags:
+      - catalog-controller
+      operationId: getDistricts_1
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DistrictResponse"
+  /api/v1/districts/{id}:
+    get:
+      tags:
+      - catalog-controller
+      operationId: getDistrict
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/DistrictResponse"
+  /api/v1/districts/{id}/measures:
+    get:
+      tags:
+      - catalog-controller
+      operationId: getMeasuresForDistrict
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DistrictMeasureResponse"
+components:
+  schemas:
+    Decision:
+      type: object
+      properties:
+        measureId:
+          type: string
+          description: Уникальный ID из GET /api/v1/measures
+          example: M7
+          pattern: "^M([1-9]|1[0-4])$"
+        districtId:
+          type: string
+          description: Обязателен для районных мер. Для городских отсутствует или
+            null.
+          enum:
+          - esil
+          - almaty
+          - saryarka
+          - baikonur
+          - nura
+          example: nura
+      required:
+      - measureId
+    SimulationRequest:
+      type: object
+      properties:
+        decisions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Decision"
+          maxItems: 5
+          minItems: 5
+      required:
+      - decisions
+    AppliedSynergy:
+      type: object
+      properties:
+        measureIds:
+          type: array
+          items:
+            type: string
+        districtId:
+          type: string
+        metric:
+          type: string
+        bonus:
+          type: number
+    Budget:
+      type: object
+      properties:
+        limit:
+          type: integer
+          format: int32
+        spent:
+          type: integer
+          format: int32
+        remaining:
+          type: integer
+          format: int32
+    CriticalMetric:
+      type: object
+      properties:
+        districtId:
+          type: string
+        districtName:
+          type: string
+        metric:
+          type: string
+        value:
+          type: number
+    DistrictResult:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        populationShare:
+          type: number
+        before:
+          type: object
+          additionalProperties:
+            type: number
+        after:
+          type: object
+          additionalProperties:
+            type: number
+        metricDeltas:
+          type: object
+          additionalProperties:
+            type: number
+        scoreBefore:
+          type: number
+        scoreAfter:
+          type: number
+        scoreDelta:
+          type: number
+    Explanation:
+      type: object
+      properties:
+        source:
+          type: string
+          description: "template: детерминированное объяснение без вызова LLM"
+        summary:
+          type: string
+        strengths:
+          type: array
+          items:
+            type: string
+        risks:
+          type: array
+          items:
+            type: string
+        recommendations:
+          type: array
+          items:
+            type: string
+    MeasureEffect:
+      type: object
+      properties:
+        measureId:
+          type: string
+        name:
+          type: string
+        categoryId:
+          type: string
+        scope:
+          type: string
+        targetDistrictId:
+          type: string
+        cost:
+          type: integer
+          format: int32
+        lagQuarters:
+          type: integer
+          format: int32
+        realizationFactor:
+          type: number
+        affectedDistrictIds:
+          type: array
+          items:
+            type: string
+        realizedEffects:
+          type: object
+          additionalProperties:
+            type: number
+          description: "Эффекты в каждом затронутом районе с учётом лага, до clip\
+            \ и синергий"
+        districtScoreContributionBeforeClip:
+          type: number
+          description: Прямой вклад в D района до clip и синергий; не вклад в нелинейный
+            FINAL SCORE
+    ScoreSummary:
+      type: object
+      properties:
+        dAvg:
+          type: number
+        dMin:
+          type: number
+        weakestDistrictId:
+          type: string
+        weakestDistrictName:
+          type: string
+        nCrit:
+          type: integer
+          format: int32
+        criticalMetrics:
+          type: array
+          items:
+            $ref: "#/components/schemas/CriticalMetric"
+        cityContribution:
+          type: number
+        weakestDistrictContribution:
+          type: number
+        criticalPenalty:
+          type: number
+        finalScore:
+          type: number
+    SimulationResult:
+      type: object
+      properties:
+        metricName:
+          type: string
+        modelVersion:
+          type: string
+        finalScore:
+          type: number
+          description: Точный Score без промежуточного округления
+          example: 56.54307
+        displayScore:
+          type: number
+          description: "Score, округлённый до 2 знаков для показа"
+          example: 56.54
+        baselineScore:
+          type: number
+        scoreDelta:
+          type: number
+        budget:
+          $ref: "#/components/schemas/Budget"
+        horizonQuarters:
+          type: integer
+          format: int32
+        baseline:
+          $ref: "#/components/schemas/ScoreSummary"
+        summary:
+          $ref: "#/components/schemas/ScoreSummary"
+        districts:
+          type: array
+          items:
+            $ref: "#/components/schemas/DistrictResult"
+        measureEffects:
+          type: array
+          items:
+            $ref: "#/components/schemas/MeasureEffect"
+        synergies:
+          type: array
+          items:
+            $ref: "#/components/schemas/AppliedSynergy"
+        explanation:
+          $ref: "#/components/schemas/Explanation"
+    ValidationProblem:
+      type: object
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+          format: int32
+        detail:
+          type: string
+        instance:
+          type: string
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/Violation"
+    Violation:
+      type: object
+      properties:
+        code:
+          type: string
+        field:
+          type: string
+        message:
+          type: string
+    ProblemDetail:
+      type: object
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+          format: int32
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri
+        properties:
+          type: object
+          additionalProperties: {}
+    ApiLinks:
+      type: object
+      properties:
+        districts:
+          type: string
+        districtTemplate:
+          type: string
+        measures:
+          type: string
+        districtMeasuresTemplate:
+          type: string
+        mapLayers:
+          type: string
+        calculate:
+          type: string
+        baseline:
+          type: string
+        swaggerUi:
+          type: string
+        openApi:
+          type: string
+    BootstrapResponse:
+      type: object
+      properties:
+        apiVersion:
+          type: string
+        budgetLimit:
+          type: integer
+          format: int32
+        requiredDecisionCount:
+          type: integer
+          format: int32
+        horizonQuarters:
+          type: integer
+          format: int32
+        maxMeasuresPerCategory:
+          type: integer
+          format: int32
+        baselineScore:
+          type: number
+          format: double
+        api:
+          $ref: "#/components/schemas/ApiLinks"
+        map:
+          $ref: "#/components/schemas/MapLinks"
+        dataNotes:
+          type: array
+          items:
+            type: string
+        scoreRules:
+          $ref: "#/components/schemas/ScoreRules"
+    ConflictRule:
+      type: object
+      properties:
+        firstMeasureId:
+          type: string
+        secondMeasureId:
+          type: string
+        sameDistrictOnly:
+          type: boolean
+        reason:
+          type: string
+    MapLinks:
+      type: object
+      properties:
+        cityBoundary:
+          type: string
+        districts:
+          type: string
+        districtStats:
+          type: string
+        pois:
+          type: string
+        parks:
+          type: string
+        roads:
+          type: string
+    ScoreRules:
+      type: object
+      properties:
+        formula:
+          type: string
+        metricWeights:
+          type: object
+          additionalProperties:
+            type: number
+        criticalThresholdExclusive:
+          type: number
+        synergies:
+          type: array
+          items:
+            $ref: "#/components/schemas/SynergyRule"
+        conflicts:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConflictRule"
+    SynergyRule:
+      type: object
+      properties:
+        districtMeasureId:
+          type: string
+        cityMeasureId:
+          type: string
+        metric:
+          type: string
+        bonus:
+          type: integer
+          format: int32
+    MeasureResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        categoryId:
+          type: string
+        categoryName:
+          type: string
+        name:
+          type: string
+        scope:
+          type: string
+        cost:
+          type: integer
+          format: int32
+        lagQuarters:
+          type: integer
+          format: int32
+        realizationFactor:
+          type: number
+          format: double
+        fullEffects:
+          type: object
+          additionalProperties:
+            type: integer
+            format: int32
+        realizedEffects:
+          type: object
+          additionalProperties:
+            type: number
+            format: double
+    LayerManifest:
+      type: object
+      properties:
+        id:
+          type: string
+        url:
+          type: string
+        count:
+          type: integer
+          format: int64
+        bytes:
+          type: integer
+          format: int64
+        contentType:
+          type: string
+        description:
+          type: string
+    MapLayersResponse:
+      type: object
+      properties:
+        source:
+          type: string
+        release:
+          type: string
+        attribution:
+          type: string
+        layers:
+          type: array
+          items:
+            $ref: "#/components/schemas/LayerManifest"
+    DistrictResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        populationShare:
+          type: number
+          format: double
+        metrics:
+          type: object
+          additionalProperties:
+            type: integer
+            format: int32
+        baselineScore:
+          type: number
+          format: double
+    DistrictMeasureResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        categoryId:
+          type: string
+        categoryName:
+          type: string
+        name:
+          type: string
+        scope:
+          type: string
+        cost:
+          type: integer
+          format: int32
+        lagQuarters:
+          type: integer
+          format: int32
+        realizationFactor:
+          type: number
+          format: double
+        fullEffects:
+          type: object
+          additionalProperties:
+            type: integer
+            format: int32
+        realizedEffects:
+          type: object
+          additionalProperties:
+            type: number
+            format: double
+        targetDistrictId:
+          type: string
+        affectedDistrictIds:
+          type: array
+          items:
+            type: string
