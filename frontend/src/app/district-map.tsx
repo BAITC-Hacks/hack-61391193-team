@@ -371,12 +371,12 @@ export default function DistrictMap() {
     if (decisions.length + 1 === (bootstrap?.requiredDecisionCount ?? 5)) clearSelection();
   }
 
-  async function calculate() {
-    if (!bootstrap || decisions.length !== bootstrap.requiredDecisionCount) return;
+  async function calculate(list: Decision[] = decisions) {
+    if (!bootstrap || list.length !== bootstrap.requiredDecisionCount) return;
     const requestId = ++calculationId.current;
     setCalculating(true); setCalculationError([]);
     try {
-      const response = await apiPost<SimulationResult>(bootstrap.api.calculate, { decisions });
+      const response = await apiPost<SimulationResult>(bootstrap.api.calculate, { decisions: list });
       if (requestId !== calculationId.current) return;
       setResult(response);
       setShowResults(true);
@@ -399,6 +399,15 @@ export default function DistrictMap() {
     budget: { limit: bootstrap?.budgetLimit ?? 100, spent: selections.reduce((sum, item) => sum + (item.measure?.cost ?? 0), 0) },
     result: result ? { score: result.displayScore, scoreDelta: result.scoreDelta, explanation: result.explanation?.summary } : null,
   });
+
+  function tryBestPlan() {
+    if (!result?.bestSolution) return;
+    // Recalculating the returned decisions shows that the maximum is a real, valid plan.
+    const best = result.bestSolution.decisions.map((item) => item.districtId
+      ? { measureId: item.measureId, districtId: item.districtId } : { measureId: item.measureId });
+    setDecisions(best);
+    void calculate(best);
+  }
 
   function removeDecision(measureId: string) {
     calculationId.current += 1;
@@ -466,7 +475,7 @@ export default function DistrictMap() {
       </aside>}
       <ScenarioHud selections={selections} requiredCount={bootstrap?.requiredDecisionCount ?? 5} budgetLimit={bootstrap?.budgetLimit ?? 100} calculating={calculating} ready={!!bootstrap} errors={calculationError} onRemove={removeDecision} onCalculate={() => void calculate()} />
       <ChatPanel context={chatContext} />
-      {result && showResults && <ResultsOverlay result={result} selections={selections} bootstrap={bootstrap} onViewDistricts={() => setShowResults(false)} onNewScenario={newScenario} />}
+      {result && showResults && <ResultsOverlay result={result} selections={selections} bootstrap={bootstrap} onViewDistricts={() => setShowResults(false)} onNewScenario={newScenario} onTryBest={tryBestPlan} busy={calculating} />}
     </main>
   );
 }

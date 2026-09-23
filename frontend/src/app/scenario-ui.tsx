@@ -1,6 +1,7 @@
 "use client";
 
 import type { Bootstrap, Decision, District, Measure, SimulationResult } from "./api";
+import ScenarioComparison from "./scenario-comparison";
 
 const categories = [
   { name: "Транспорт", metrics: ["T1", "T2"] },
@@ -87,6 +88,9 @@ type ResultsProps = {
   bootstrap: Bootstrap | null;
   onViewDistricts: () => void;
   onNewScenario: () => void;
+  /** Loads bestSolution.decisions as the user's plan and recalculates. */
+  onTryBest: () => void;
+  busy: boolean;
 };
 
 function categoryValue(result: SimulationResult, metrics: string[], weights: Record<string, number>, phase: "before" | "after") {
@@ -97,7 +101,7 @@ function categoryValue(result: SimulationResult, metrics: string[], weights: Rec
     metrics.reduce((metricSum, metric) => metricSum + (district[phase][metric] ?? 0) * (weights[metric] ?? 1), 0) / metricWeight, 0) / population;
 }
 
-export function ResultsOverlay({ result, selections, bootstrap, onViewDistricts, onNewScenario }: ResultsProps) {
+export function ResultsOverlay({ result, selections, bootstrap, onViewDistricts, onNewScenario, onTryBest, busy }: ResultsProps) {
   const weights = bootstrap?.scoreRules.metricWeights ?? {};
   const explanation = result.explanation;
   const isAi = explanation?.source === "llm";
@@ -134,19 +138,23 @@ export function ResultsOverlay({ result, selections, bootstrap, onViewDistricts,
           return <li key={decision.measureId}><span className="results-decision-index">{index + 1}</span><div><strong>{measure?.name ?? effect?.name ?? decision.measureId} — {district}</strong><small>{effect?.cost ?? measure?.cost ?? 0} ед. · {mainEffect ? `${metricNames[mainEffect[0]] ?? mainEffect[0]} ${signed(mainEffect[1], 1)}` : "Эффект учтён в Score"}</small></div></li>;
         })}</ol></section>
       </div>
-      <section className="results-card analysis-card"><h2>AI Analysis</h2>
-        {isAi ? <><p>{explanation.summary}</p><div className="analysis-grid">
+      <ScenarioComparison result={result} metricLabels={metricNames} busy={busy} onTryBest={onTryBest} />
+      <section className="results-card analysis-card">
+        <div className="analysis-heading">
+          <h2>AI Analysis</h2>
+          <span className={`source-badge ${isAi ? "llm" : "template"}`} title={isAi
+            ? "Текст написан языковой моделью по числам backend и прошёл проверку фактов"
+            : "Языковая модель недоступна или её ответ не прошёл проверку фактов"}>{isAi ? "AI" : "Шаблон"}</span>
+        </div>
+        {explanation.summary.split(/\n+/).filter(Boolean).map((paragraph, index) => <p key={index}>{paragraph}</p>)}
+        {/* Strengths, risks and recommendations are always calculated by the backend, with or without the LLM. */}
+        <div className="analysis-grid">
           <div><h3>Сильные стороны</h3><AnalysisItems items={explanation.strengths} /></div>
           <div><h3>Риски</h3><AnalysisItems items={explanation.risks} /></div>
           <div><h3>Возможные последствия</h3><p className="results-note">Отдельный анализ последствий пока недоступен.</p></div>
           <div><h3>Рекомендация</h3><AnalysisItems items={explanation.recommendations} /></div>
-        </div></> : <div className="analysis-grid">
-          <div><h3>Сильные стороны</h3><p className="results-note">Ожидается AI анализ.</p></div>
-          <div><h3>Риски</h3><p className="results-note">Ожидается AI анализ.</p></div>
-          <div><h3>Возможные последствия</h3><p className="results-note">Ожидается AI анализ.</p></div>
-          <div><h3>Рекомендация</h3><p className="results-note">Ожидается AI анализ.</p></div>
-        </div>}
-        {!isAi && explanation?.summary && <p className="results-model-note"><strong>Пояснение модели:</strong> {explanation.summary}</p>}
+        </div>
+        {!isAi && <p className="results-model-note">Внешняя AI-модель сейчас недоступна; объяснение составлено по расчёту backend.</p>}
       </section>
       <footer className="results-actions"><button type="button" className="results-secondary" onClick={onViewDistricts}>Посмотреть районы</button><button type="button" className="primary-button" onClick={onNewScenario}>Новый сценарий</button></footer>
     </div>
