@@ -1,0 +1,386 @@
+{
+  "metricName": "Astana Quality of Life Score",
+  "modelVersion": "v1",
+  "finalScore": 56.54307,
+  "displayScore": 56.54,
+  "baselineScore": 52.55768,
+  "scoreDelta": 3.98539,
+  "budget": {
+    "limit": 100,
+    "spent": 95,
+    "remaining": 5
+  },
+  "horizonQuarters": 8,
+  "baseline": {
+    "dAvg": 56.8624,
+    "dMin": 49.18,
+    "weakestDistrictId": "nura",
+    "weakestDistrictName": "Нура",
+    "nCrit": 2,
+    "criticalMetrics": [
+      {
+        "districtId": "nura",
+        "districtName": "Нура",
+        "metric": "S1",
+        "value": 38
+      },
+      {
+        "districtId": "nura",
+        "districtName": "Нура",
+        "metric": "S2",
+        "value": 35
+      }
+    ],
+    "cityContribution": 39.80368,
+    "weakestDistrictContribution": 14.754,
+    "criticalPenalty": 2,
+    "finalScore": 52.55768
+  },
+  "summary": {
+    "dAvg": 58.0776,
+    "dMin": 52.9625,
+    "weakestDistrictId": "nura",
+    "weakestDistrictName": "Нура",
+    "nCrit": 0,
+    "criticalMetrics": [],
+    "cityContribution": 40.65432,
+    "weakestDistrictContribution": 15.88875,
+    "criticalPenalty": 0,
+    "finalScore": 56.54307
+  },
+  "districts": [
+    {
+      "id": "esil",
+      "name": "Есиль",
+      "populationShare": 0.27,
+      "before": {
+        "T1": 45,
+        "T2": 62,
+        "E1": 68,
+        "E2": 72,
+        "S1": 48,
+        "S2": 55,
+        "B1": 78,
+        "B2": 60,
+        "C1": 75,
+        "C2": 70
+      },
+      "after": {
+        "T1": 45,
+        "T2": 62,
+        "E1": 68,
+        "E2": 72,
+        "S1": 48,
+        "S2": 55,
+        "B1": 78,
+        "B2": 60,
+        "C1": 75,
+        "C2": 74.375
+      },
+      "metricDeltas": {
+        "T1": 0,
+        "T2": 0,
+        "E1": 0,
+        "E2": 0,
+        "S1": 0,
+        "S2": 0,
+        "B1": 0,
+        "B2": 0,
+        "C1": 0,
+        "C2": 4.375
+      },
+      "scoreBefore": 62.99,
+      "scoreAfter": 63.4275,
+      "scoreDelta": 0.4375
+    },
+    {
+      "id": "almaty",
+      "name": "Алматы",
+      "populationShare": 0.24,
+      "before": {
+        "T1": 40,
+        "T2": 75,
+        "E1": 50,
+        "E2": 55,
+        "S1": 60,
+        "S2": 65,
+        "B1": 62,
+        "B2": 52,
+        "C1": 50,
+        "C2": 60
+      },
+      "after": {
+        "T1": 40,
+        "T2": 75,
+        "E1": 50,
+        "E2": 55,
+        "S1": 60,
+        "S2": 65,
+        "B1": 62,
+        "B2": 52,
+        "C1": 50,
+        "C2": 64.375
+      },
+      "metricDeltas": {
+        "T1": 0,
+        "T2": 0,
+        "E1": 0,
+        "E2": 0,
+        "S1": 0,
+        "S2": 0,
+        "B1": 0,
+        "B2": 0,
+        "C1": 0,
+        "C2": 4.375
+      },
+      "scoreBefore": 57.06,
+      "scoreAfter": 57.4975,
+      "scoreDelta": 0.4375
+    },
+    {
+      "id": "saryarka",
+      "name": "Сарыарка",
+      "populationShare": 0.2,
+      "before": {
+        "T1": 50,
+        "T2": 70,
+        "E1": 42,
+        "E2": 40,
+        "S1": 62,
+        "S2": 68,
+        "B1": 58,
+        "B2": 55,
+        "C1": 45,
+        "C2": 55
+      },
+      "after": {
+        "T1": 50,
+        "T2": 70,
+        "E1": 42,
+        "E2": 48.75,
+        "S1": 62,
+        "S2": 68,
+        "B1": 58,
+        "B2": 55,
+        "C1": 47.5,
+        "C2": 59.375
+      },
+      "metricDeltas": {
+        "T1": 0,
+        "T2": 0,
+        "E1": 0,
+        "E2": 8.75,
+        "S1": 0,
+        "S2": 0,
+        "B1": 0,
+        "B2": 0,
+        "C1": 2.5,
+        "C2": 4.375
+      },
+      "scoreBefore": 54.65,
+      "scoreAfter": 56.3,
+      "scoreDelta": 1.65
+    },
+    {
+      "id": "baikonur",
+      "name": "Байконур",
+      "populationShare": 0.13,
+      "before": {
+        "T1": 52,
+        "T2": 68,
+        "E1": 55,
+        "E2": 50,
+        "S1": 58,
+        "S2": 60,
+        "B1": 52,
+        "B2": 58,
+        "C1": 55,
+        "C2": 58
+      },
+      "after": {
+        "T1": 52,
+        "T2": 68,
+        "E1": 55,
+        "E2": 50,
+        "S1": 58,
+        "S2": 60,
+        "B1": 52,
+        "B2": 58,
+        "C1": 55,
+        "C2": 62.375
+      },
+      "metricDeltas": {
+        "T1": 0,
+        "T2": 0,
+        "E1": 0,
+        "E2": 0,
+        "S1": 0,
+        "S2": 0,
+        "B1": 0,
+        "B2": 0,
+        "C1": 0,
+        "C2": 4.375
+      },
+      "scoreBefore": 56.63,
+      "scoreAfter": 57.0675,
+      "scoreDelta": 0.4375
+    },
+    {
+      "id": "nura",
+      "name": "Нура",
+      "populationShare": 0.16,
+      "before": {
+        "T1": 55,
+        "T2": 40,
+        "E1": 45,
+        "E2": 65,
+        "S1": 38,
+        "S2": 35,
+        "B1": 55,
+        "B2": 50,
+        "C1": 60,
+        "C2": 50
+      },
+      "after": {
+        "T1": 55,
+        "T2": 40,
+        "E1": 45,
+        "E2": 65,
+        "S1": 48,
+        "S2": 43.75,
+        "B1": 67.5,
+        "B2": 51.75,
+        "C1": 60,
+        "C2": 54.375
+      },
+      "metricDeltas": {
+        "T1": 0,
+        "T2": 0,
+        "E1": 0,
+        "E2": 0,
+        "S1": 10,
+        "S2": 8.75,
+        "B1": 12.5,
+        "B2": 1.75,
+        "C1": 0,
+        "C2": 4.375
+      },
+      "scoreBefore": 49.18,
+      "scoreAfter": 52.9625,
+      "scoreDelta": 3.7825
+    }
+  ],
+  "measureEffects": [
+    {
+      "measureId": "M5",
+      "name": "Перевод частного сектора на чистое топливо",
+      "categoryId": "ecology",
+      "scope": "district",
+      "targetDistrictId": "saryarka",
+      "cost": 25,
+      "lagQuarters": 3,
+      "realizationFactor": 0.625,
+      "affectedDistrictIds": [
+        "saryarka"
+      ],
+      "realizedEffects": {
+        "E2": 8.75,
+        "C1": 2.5
+      },
+      "districtScoreContributionBeforeClip": 1.2125
+    },
+    {
+      "measureId": "M7",
+      "name": "Школа + детсад (модульное строительство)",
+      "categoryId": "social",
+      "scope": "district",
+      "targetDistrictId": "nura",
+      "cost": 24,
+      "lagQuarters": 3,
+      "realizationFactor": 0.625,
+      "affectedDistrictIds": [
+        "nura"
+      ],
+      "realizedEffects": {
+        "S1": 10
+      },
+      "districtScoreContributionBeforeClip": 1.1
+    },
+    {
+      "measureId": "M8",
+      "name": "Центр семейного здоровья / поликлиника",
+      "categoryId": "social",
+      "scope": "district",
+      "targetDistrictId": "nura",
+      "cost": 20,
+      "lagQuarters": 3,
+      "realizationFactor": 0.625,
+      "affectedDistrictIds": [
+        "nura"
+      ],
+      "realizedEffects": {
+        "S2": 8.75
+      },
+      "districtScoreContributionBeforeClip": 0.9625
+    },
+    {
+      "measureId": "M10",
+      "name": "Освещение и камеры (расширение Safe City)",
+      "categoryId": "safety",
+      "scope": "district",
+      "targetDistrictId": "nura",
+      "cost": 12,
+      "lagQuarters": 1,
+      "realizationFactor": 0.875,
+      "affectedDistrictIds": [
+        "nura"
+      ],
+      "realizedEffects": {
+        "B1": 10.5,
+        "B2": 1.75
+      },
+      "districtScoreContributionBeforeClip": 1.1025
+    },
+    {
+      "measureId": "M12",
+      "name": "Единая цифровая платформа обращений",
+      "categoryId": "services",
+      "scope": "city",
+      "targetDistrictId": null,
+      "cost": 14,
+      "lagQuarters": 1,
+      "realizationFactor": 0.875,
+      "affectedDistrictIds": [
+        "esil",
+        "almaty",
+        "saryarka",
+        "baikonur",
+        "nura"
+      ],
+      "realizedEffects": {
+        "C2": 4.375
+      },
+      "districtScoreContributionBeforeClip": 0.4375
+    }
+  ],
+  "synergies": [
+    {
+      "measureIds": [
+        "M10",
+        "M12"
+      ],
+      "districtId": "nura",
+      "metric": "B1",
+      "bonus": 2
+    }
+  ],
+  "explanation": {
+    "source": "template",
+    "summary": "Сохранённый расчёт модели v1: Score 56.54, прирост +3.99, бюджет 95 из 100.",
+    "strengths": [
+      "Критических показателей после мероприятий нет."
+    ],
+    "risks": [],
+    "recommendations": []
+  }
+}

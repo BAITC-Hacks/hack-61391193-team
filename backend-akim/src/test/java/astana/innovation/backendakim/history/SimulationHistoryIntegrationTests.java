@@ -1,7 +1,11 @@
 package astana.innovation.backendakim.history;
 
+import astana.innovation.backendakim.catalog.CatalogService;
+import astana.innovation.backendakim.catalog.DistrictRepository;
 import astana.innovation.backendakim.simulation.SimulationRequest;
 import astana.innovation.backendakim.simulation.SimulationService;
+import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -50,8 +54,20 @@ class SimulationHistoryIntegrationTests {
     @Autowired MockMvc mvc;
     @Autowired JdbcTemplate jdbc;
     @Autowired ObjectMapper json;
+    @Autowired CatalogService catalog;
+    @Autowired DistrictRepository districts;
     @MockitoSpyBean SimulationService simulation;
     @MockitoSpyBean SimulationHistoryRepository history;
+
+    @Test
+    void postgresCatalogMatchesTheVersionedStandaloneDatasetIncludingProvenance() {
+        assertThat(districts.findCurrent()).hasSize(6).isEqualTo(new CatalogService().getDistricts());
+        assertThat(catalog.getDistricts()).isEqualTo(districts.findCurrent());
+        assertThat(jdbc.queryForObject("SELECT sum(population_share) FROM akim.districts", BigDecimal.class))
+                .isEqualByComparingTo(BigDecimal.ONE);
+        assertThat(jdbc.queryForObject("SELECT data_provenance ->> 'modelVersion' FROM akim.districts WHERE id = 'saraishyk'",
+                String.class)).isEqualTo("v2-saraishyk");
+    }
 
     @Test
     void calculatesOutsideDatabaseTransactionAndInsertsAtomically() throws Exception {
@@ -78,8 +94,9 @@ class SimulationHistoryIntegrationTests {
         var saved = save(user);
         String id = saved.path("id").asText();
         assertThat(saved.path("userId").asText()).isEqualTo(user.userId().toString());
-        assertThat(saved.path("result").path("finalScore").decimalValue()).isEqualByComparingTo("56.54307");
-        assertThat(saved.path("result").path("districts")).hasSize(5);
+        assertThat(saved.path("result").path("finalScore").decimalValue()).isEqualByComparingTo("56.31781049");
+        assertThat(saved.path("result").path("districts")).hasSize(6);
+        assertThat(saved.path("result").path("districts").path(5).path("dataProvenance").path("syntheticMetrics").asBoolean()).isTrue();
         assertThat(saved.path("request").path("decisions")).hasSize(5);
 
         doThrow(new AssertionError("Reading history must not recalculate scores"))
@@ -89,7 +106,7 @@ class SimulationHistoryIntegrationTests {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
         assertThat(loaded).isEqualTo(saved);
         assertThat(jdbc.queryForObject("SELECT result ->> 'modelVersion' FROM akim.simulations WHERE id = ?",
-                String.class, UUID.fromString(id))).isEqualTo("v1");
+                String.class, UUID.fromString(id))).isEqualTo("v2-saraishyk");
         assertThat(count(user)).isEqualTo(1);
     }
 
@@ -120,6 +137,59 @@ class SimulationHistoryIntegrationTests {
                 String.class, owner.userId());
         assertThat(storedHash).isEqualTo(AnonymousTokens.hash(owner.accessToken())).doesNotContain(owner.accessToken());
         assertThat(owner.toString()).doesNotContain(owner.accessToken());
+    }
+
+    @Test
+    void readsHistoricalFiveDistrictV1SnapshotWithoutRecalculatingOrAddingNewProvenance() throws Exception {
+        var user = createUser();
+        UUID id = UUID.randomUUID();
+        String oldResult;
+        try (var input = getClass().getResourceAsStream("/history/simulation-result-v1.json")) {
+            assertThat(input).isNotNull();
+            oldResult = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+        }
+        jdbc.update("""
+                INSERT INTO akim.simulations
+                    (id, user_id, created_at, model_version, request, result,
+                     final_score, baseline_score, score_delta, budget_spent)
+                VALUES (?, ?, CURRENT_TIMESTAMP, 'v1', CAST(? AS jsonb), CAST(? AS jsonb),
+                        56.54307, 52.55768, 3.98539, 95)
+                """, id, user.userId(), SimulationRequest.EXAMPLE_JSON, oldResult);
+        doThrow(new AssertionError("A v1 history snapshot must not be recalculated using v2"))
+                .when(simulation).calculate(any());
+
+        var restored = json.readTree(mvc.perform(get("/api/v1/simulations/" + id).header("Authorization", bearer(user)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.result.modelVersion").value("v1"))
+                .andExpect(jsonPath("$.result.finalScore").value(56.54307))
+                .andExpect(jsonPath("$.result.baselineScore").value(52.55768))
+                .andExpect(jsonPath("$.result.districts", hasSize(5)))
+                .andExpect(jsonPath("$.result.bestSolution").doesNotExist())
+                .andExpect(jsonPath("$.result.comparison").doesNotExist())
+                .andReturn().getResponse().getContentAsString()).path("result");
+        for (var district : restored.path("districts")) {
+            assertThat(district.path("id").asText()).isNotEqualTo("saraishyk");
+            assertThat(district.path("dataProvenance").isNull() || district.path("dataProvenance").isMissingNode()).isTrue();
+        }
+        mvc.perform(get("/api/v1/simulations").header("Authorization", bearer(user)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.items[0].modelVersion").value("v1"))
+                .andExpect(jsonPath("$.items[0].finalScore").value(56.54307));
+        String stored = jdbc.queryForObject("SELECT result::text FROM akim.simulations WHERE id = ?", String.class, id);
+        assertThat(json.readTree(stored)).isEqualTo(json.readTree(oldResult));
+    }
+
+    @Test
+    void persistsSaraishykSelectionAndItsModelProvenance() throws Exception {
+        var user = createUser();
+        var saved = json.readTree(mvc.perform(post("/api/v1/simulations").header("Authorization", bearer(user))
+                        .contentType(MediaType.APPLICATION_JSON).content(SimulationRequest.SARAISHYK_EXAMPLE_JSON))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString());
+        String id = saved.path("id").asText();
+        assertThat(saved.path("request").path("decisions").path(0).path("districtId").asText()).isEqualTo("saraishyk");
+        assertThat(saved.path("result").path("finalScore").decimalValue()).isEqualByComparingTo("54.95216719");
+        assertThat(saved.path("result").path("districts").path(5).path("dataProvenance").path("metricAssumptions")).hasSize(10);
+        var loaded = json.readTree(mvc.perform(get("/api/v1/simulations/" + id).header("Authorization", bearer(user)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        assertThat(loaded).isEqualTo(saved);
     }
 
     @Test

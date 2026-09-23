@@ -125,7 +125,7 @@ public class SimulationOptimizer {
                 }
             }
             // A district can receive any subset of the <=5 local measures. Reuse its exact result
-            // in every assignment, instead of constructing 694,395 complete simulation responses.
+            // in every assignment, instead of constructing a complete response for each candidate.
             DistrictOutcome[][] outcomes = new DistrictOutcome[districts.size()][maskCount];
             for (int mask = 0; mask < maskCount; mask++) {
                 validMasks[mask] = validLocalSubset(local, mask);

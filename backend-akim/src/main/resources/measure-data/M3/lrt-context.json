@@ -1,0 +1,217 @@
+{
+  "schemaVersion": "1.0",
+  "measureId": "M3",
+  "title": "ЛРТ Астаны: действующая линия и расширение",
+  "city": "Астана",
+  "verifiedAt": "2026-09-23",
+  "description": "Справочные сведения из официальных публикаций. Дата проверки источников не означает оперативного подтверждения расписания или тарифа на этот день.",
+  "facts": [
+    {
+      "id": "opening_date",
+      "label": "Запуск первой очереди",
+      "value": "2026-05-16",
+      "unit": "date",
+      "status": "reported_actual",
+      "asOf": "2026-05-16",
+      "sourceIds": ["akorda-launch"]
+    },
+    {
+      "id": "operation_status",
+      "label": "Последнее подтверждение работы в выбранных источниках",
+      "value": "operating",
+      "unit": null,
+      "status": "reported_actual",
+      "asOf": "2026-07-02",
+      "note": "CTS сообщила о возобновлении штатного движения Tarlan Astana после временной остановки. Это датированное сообщение, а не live-статус.",
+      "sourceIds": ["cts-operation"]
+    },
+    {
+      "id": "route_length",
+      "label": "Длина первой очереди",
+      "value": 22.4,
+      "unit": "km",
+      "status": "published_specification",
+      "asOf": "2026-05-16",
+      "sourceIds": ["akorda-launch", "cts-specification"]
+    },
+    {
+      "id": "station_count",
+      "label": "Станции первой очереди",
+      "value": 18,
+      "unit": "stations",
+      "status": "published_specification",
+      "asOf": "2026-05-16",
+      "sourceIds": ["akorda-launch", "cts-specification"]
+    },
+    {
+      "id": "trains_in_service",
+      "label": "Составы на линии по опубликованной схеме работы",
+      "value": 15,
+      "unit": "trains",
+      "status": "published_specification",
+      "asOf": "2026-05-16",
+      "sourceIds": ["akorda-launch"]
+    },
+    {
+      "id": "reserve_trains",
+      "label": "Резервные составы",
+      "value": 4,
+      "unit": "trains",
+      "status": "published_specification",
+      "asOf": "2026-05-16",
+      "sourceIds": ["akorda-launch"]
+    },
+    {
+      "id": "train_capacity",
+      "label": "Вместимость одного состава",
+      "value": 600,
+      "comparison": "gt",
+      "unit": "passengers_per_train",
+      "status": "published_specification",
+      "asOf": "2026-05-16",
+      "note": "Источник указывает более 600 пассажиров; это вместимость состава, а не измеренный пассажиропоток.",
+      "sourceIds": ["akorda-launch"]
+    },
+    {
+      "id": "headway",
+      "label": "Опубликованный интервал",
+      "value": {"min": 5, "max": 6},
+      "unit": "minutes",
+      "status": "published_specification",
+      "asOf": "2026-05-16",
+      "sourceIds": ["akorda-launch"]
+    },
+    {
+      "id": "end_to_end_duration",
+      "label": "Время поездки по всей линии",
+      "value": 40,
+      "approximate": true,
+      "unit": "minutes",
+      "status": "published_specification",
+      "asOf": "2026-05-16",
+      "sourceIds": ["akorda-launch"]
+    },
+    {
+      "id": "automation_grade",
+      "label": "Уровень автоматизации",
+      "value": "GoA4",
+      "unit": null,
+      "status": "published_specification",
+      "asOf": "2026-05-12",
+      "sourceIds": ["cts-specification"]
+    },
+    {
+      "id": "announced_fare",
+      "label": "Объявленная стоимость поездки",
+      "value": 200,
+      "unit": "KZT",
+      "status": "announced",
+      "asOf": "2026-05-12",
+      "note": "Объявление CTS перед запуском. Актуальность тарифа на дату поездки нужно проверять у оператора; это не стоимость меры M3.",
+      "sourceIds": ["cts-specification"]
+    }
+  ],
+  "route": {
+    "from": "Международный аэропорт Нурсултан Назарбаев",
+    "to": "Железнодорожный вокзал Нұрлы жол",
+    "corridor": ["Проспект Кабанбай батыр", "Улица Сыганак", "Улица Шамши Калдаякова"],
+    "sourceIds": ["environment-phase-one"],
+    "note": "Описание коридора из проектных материалов первой очереди. Для длины используется более поздняя публикация Акорды (22,4 км); в проектном объявлении указано 21,576 км."
+  },
+  "expansion": {
+    "phase": 2,
+    "status": "planned_with_reported_initial_works",
+    "asOf": "2026-05-16",
+    "plannedLengthKm": 26.5,
+    "plannedStationCount": 20,
+    "directions": ["Вокзал Астана-1", "Жағалау", "Косшы"],
+    "sourceIds": ["akorda-launch"],
+    "constructionEvidence": {
+      "asOf": "2026-05-03",
+      "direction": "Косшы",
+      "description": "CTS сообщила о первой опоре и первой сборной балке. Это подтверждение начальных работ на этом направлении, а не готовности всей второй очереди.",
+      "sourceIds": ["cts-expansion"]
+    },
+    "planningEvidence": {
+      "hearingDate": "2026-08-17",
+      "description": "В реестре опубликовано объявление общественных слушаний по участкам 1 и 2 второй очереди, включающей линии 2, 3 и 4.",
+      "namedSimulationDistrictIds": ["saryarka", "nura", "esil"],
+      "sourceIds": ["environment-hearing"],
+      "note": "Районы названы в проекте слушаний; это не геометрия охвата и не условие доступности M3 в симуляторе. Объявление само по себе не подтверждает согласование проекта."
+    }
+  },
+  "map": {
+    "url": "/api/v1/map/lrt",
+    "coverage": "partial",
+    "source": "Overture Maps / OpenStreetMap",
+    "release": "2026-08-19.0",
+    "attribution": "© OpenStreetMap contributors, Overture Maps Foundation",
+    "license": "ODbL-1.0",
+    "note": "Слой выделен из roads_main.geojson по class=light_rail. Это неполные исходные сегменты, а не полная линия длиной 22,4 км. Точная метаинформация о геометрии хранится в самом GeoJSON. Координаты станций и второй очереди не добавлены."
+  },
+  "simulationUsage": {
+    "affectsScore": false,
+    "purpose": "Справка в карточке M3 и слой карты",
+    "note": "Стоимость 30, лаг 4 квартала и эффекты M3 задаёт конкурсная модель. Реальная линия и планы расширения дают контекст, но не доказывают численные эффекты в выбранном районе."
+  },
+  "sources": [
+    {
+      "id": "akorda-launch",
+      "publisher": "Официальный сайт Президента Республики Казахстан",
+      "title": "Запуск Astana LRT и параметры второй очереди",
+      "url": "https://mirror.akorda.kz/kz/memleket-basshysy-lrt-zhuyesin-iske-kosu-rasimine-katysty-164741",
+      "publishedAt": "2026-05-16",
+      "accessedAt": "2026-09-23",
+      "language": "kk"
+    },
+    {
+      "id": "cts-specification",
+      "publisher": "City Transportation Systems",
+      "title": "Пресс-тур CTS по объектам LRT",
+      "url": "https://cts.gov.kz/ru/press-center/news/v-astane-proshel-press-tur-po-obektam-lrt/",
+      "publishedAt": "2026-05-12",
+      "accessedAt": "2026-09-23",
+      "language": "ru"
+    },
+    {
+      "id": "cts-operation",
+      "publisher": "City Transportation Systems",
+      "title": "Возобновление движения Tarlan Astana",
+      "url": "https://cts.gov.kz/ru/press-center/news/dvizhenie-tarlan-astana-vosstanovleno/",
+      "publishedAt": "2026-07-02",
+      "accessedAt": "2026-09-23",
+      "language": "ru"
+    },
+    {
+      "id": "cts-expansion",
+      "publisher": "City Transportation Systems",
+      "title": "Первые опора и балка второй очереди в направлении Косшы",
+      "url": "https://cts.gov.kz/ru/press-center/news/proizvedena-zalivka-pervoy-opory-i-izgotovlena-pervaya-zhelezobetonnaya-sbornaya-balka-dlya-vtoroy-o/",
+      "publishedAt": "2026-05-03",
+      "accessedAt": "2026-09-23",
+      "language": "ru"
+    },
+    {
+      "id": "environment-phase-one",
+      "publisher": "Национальный банк данных о состоянии окружающей среды и природных ресурсов",
+      "title": "Проект первой очереди LRT: аэропорт — Нұрлы жол",
+      "url": "https://hearings.ndbecology.gov.kz/Public/PubHearings/PublicHearingDetail?hearingId=31862",
+      "publishedAt": null,
+      "eventDate": "2026-04-21",
+      "accessedAt": "2026-09-23",
+      "language": "ru",
+      "note": "Дата публикации не указана. В карточке дата слушаний 21 апреля, в тексте объявления — 20 апреля. Использовано описание маршрута; координаты станций с дубликатом 106/107 не импортированы."
+    },
+    {
+      "id": "environment-hearing",
+      "publisher": "Национальный банк данных о состоянии окружающей среды и природных ресурсов",
+      "title": "Объявление слушаний: LRT, вторая очередь, участки 1 и 2",
+      "url": "https://hearings.ndbecology.gov.kz/Public/PubHearings/PublicHearingDetail?hearingId=33927",
+      "publishedAt": null,
+      "eventDate": "2026-08-17",
+      "accessedAt": "2026-09-23",
+      "language": "ru",
+      "note": "Дата публикации не указана; eventDate — дата слушаний в карточке реестра."
+    }
+  ]
+}

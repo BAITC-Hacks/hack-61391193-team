@@ -308,7 +308,7 @@ class AuthenticationIntegrationTests {
         String id = saved.path("id").asText();
         assertThat(saved.path("userId").asText()).isEqualTo(owner.path("user").path("id").asText());
         mvc.perform(get("/api/v1/simulations/" + id).header("Authorization", bearer(login(email, "Password123"))))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.result.finalScore").value(56.54307));
+                .andExpect(status().isOk()).andExpect(jsonPath("$.result.finalScore").value(56.31781049));
         mvc.perform(get("/api/v1/simulations/" + id).header("Authorization", bearer(other)))
                 .andExpect(status().isNotFound());
         mvc.perform(get("/api/v1/simulations").header("Authorization", bearer(other))

@@ -1,5 +1,8 @@
 package astana.innovation.backendakim.mapdata;
 
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import java.time.Duration;
 import java.util.List;
 
@@ -56,6 +59,13 @@ public class MapDataController {
     @GetMapping("/roads")
     public ResponseEntity<byte[]> getRoads() {
         return layerResponse(MapLayer.ROADS);
+    }
+
+    @ApiResponse(responseCode = "200", description = "GeoJSON ЛРТ для M3 с метаданными об источнике и неполноте",
+            content = @Content(mediaType = "application/geo+json", schema = @Schema(type = "object")))
+    @GetMapping(value = "/lrt", produces = "application/geo+json")
+    public ResponseEntity<byte[]> getLrt() {
+        return layerResponse(MapLayer.LRT);
     }
 
     private ResponseEntity<byte[]> layerResponse(MapLayer layer) {

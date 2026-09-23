@@ -18,7 +18,7 @@ import static astana.innovation.backendakim.simulation.SimulationRequest.Decisio
 import static org.assertj.core.api.Assertions.assertThat;
 
 class SimulationValidatorExhaustiveTests {
-    private static final List<String> DISTRICTS = List.of("esil", "almaty", "saryarka", "baikonur", "nura");
+    private static final List<String> DISTRICTS = List.of("esil", "almaty", "saryarka", "baikonur", "nura", "saraishyk");
     private static final List<MeasureSpec> SPECS = List.of(
             spec("M1", "transport", "district", 18, 2, "T1", 6, "T2", 9),
             spec("M2", "transport", "city", 22, 2, "T1", 4, "B2", 3),
@@ -126,16 +126,16 @@ class SimulationValidatorExhaustiveTests {
 
         assertThat(combinations(SPECS, 5)).hasSize(2_002);
         assertThat(equivalenceClasses).isEqualTo(2_452);
-        assertThat(representedStates).isEqualTo(1_407_050);
-        assertThat(validStates).isEqualTo(694_395);
-        assertThat(representedStates - validStates).isEqualTo(712_655);
+        assertThat(representedStates).isEqualTo(3_210_252);
+        assertThat(validStates).isEqualTo(1_580_316);
+        assertThat(representedStates - validStates).isEqualTo(1_629_936);
         assertThat(measureCombinationsWithValidAssignment).isEqualTo(1_181);
         assertThat(violationIncidence).containsExactly(
-                Map.entry("BUDGET_EXCEEDED", 472_855L),
-                Map.entry("CATEGORY_LIMIT", 129_980L),
-                Map.entry("CONFLICT", 351_540L));
+                Map.entry("BUDGET_EXCEEDED", 1_086_594L),
+                Map.entry("CATEGORY_LIMIT", 292_470L),
+                Map.entry("CONFLICT", 788_160L));
         assertThat(validBudgetDistribution.keySet()).containsExactlyElementsOf(IntStream.rangeClosed(61, 100).boxed().toList());
-        assertThat(validBudgetDistribution.get(100)).isEqualTo(28_575L);
+        assertThat(validBudgetDistribution.get(100)).isEqualTo(66_420L);
     }
 
     @Test
@@ -243,14 +243,15 @@ class SimulationValidatorExhaustiveTests {
         Map<String, String> targets = new HashMap<>();
         combination.stream().filter(spec -> "district".equals(spec.scope()))
                 .forEach(spec -> targets.put(spec.id(), "esil"));
-        long multiplicity = power(5, (int) combination.stream().filter(spec -> "district".equals(spec.scope())).count()
+        int districtCount = DISTRICTS.size();
+        long multiplicity = power(districtCount, (int) combination.stream().filter(spec -> "district".equals(spec.scope())).count()
                 - activeLocalConflicts.size() * 2);
         for (int index = 0; index < activeLocalConflicts.size(); index++) {
             LocalConflict conflict = activeLocalConflicts.get(index);
             boolean sameDistrict = (mask & (1 << index)) != 0;
             targets.put(conflict.firstId(), conflict.baseDistrict());
             targets.put(conflict.secondId(), sameDistrict ? conflict.baseDistrict() : conflict.otherDistrict());
-            multiplicity *= sameDistrict ? 5 : 20;
+            multiplicity *= sameDistrict ? districtCount : districtCount * (districtCount - 1);
         }
         return new TargetingClass(Map.copyOf(targets), multiplicity);
     }
