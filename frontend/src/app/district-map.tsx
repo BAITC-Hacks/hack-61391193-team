@@ -94,6 +94,7 @@ export default function DistrictMap() {
   const calculationId = useRef(0);
 
   function clearSelection() {
+    setInitiativeDialog(null);
     const map = mapRef.current;
     if (map && selectedFeature.current) {
       map.setFeatureState(selectedFeature.current, { selected: false });
@@ -107,6 +108,7 @@ export default function DistrictMap() {
   }
 
   function chooseFeature(source: string, id: string | number, name: string, districtId: string | null, point: { x: number; y: number }) {
+    setInitiativeDialog(null);
     const map = mapRef.current;
     if (!map) return;
     const sameFeature = selectedFeature.current?.source === source && selectedFeature.current.id === id;
@@ -185,7 +187,7 @@ export default function DistrictMap() {
     const popup = popupRef.current;
     const container = mapContainer.current;
     const click = selectionPoint;
-    const occupiedElements = [...document.querySelectorAll<HTMLElement>(".map-brand, .score-hud, .budget-hud, .turns-hud, .map-tools, .maplibregl-ctrl-top-right")];
+    const occupiedElements = [...document.querySelectorAll<HTMLElement>(".map-brand, .score-hud, .budget-hud, .turns-hud, .turn-counter, .map-tools, .maplibregl-ctrl-top-right")];
     function positionPopup() {
       if (window.innerWidth <= 760) return;
       const width = container.clientWidth;
@@ -223,7 +225,7 @@ export default function DistrictMap() {
     occupiedElements.forEach((element) => observer.observe(element));
     window.addEventListener("resize", positionPopup);
     return () => { observer.disconnect(); window.removeEventListener("resize", positionPopup); };
-  }, [selected, selectionPoint]);
+  }, [selected, selectionPoint, initiativeDialog]);
 
   useEffect(() => {
     if (!mapContainer.current) return;
@@ -477,14 +479,25 @@ export default function DistrictMap() {
         </details>
       </div>
       {(mapError || apiError) && <div className={styles.mapNotice} role="alert">{mapError || apiError}</div>}
-      {selected && selectionPoint && <aside ref={popupRef} className={styles.selectionCard} aria-live="polite" style={{
+      {selected && selectionPoint && <aside ref={popupRef} className={`${styles.selectionCard} ${initiativeDialog ? styles.catalogCard : ""}`} aria-live="polite" style={{
         left: popupPosition?.x ?? 0, top: popupPosition?.y ?? 0, visibility: popupPosition ? "visible" : "hidden",
       }}>
         <div className={styles.cardHeading}>
-          <div><span className={styles.eyebrow}>РАЙОН АСТАНЫ</span><h2>{selected.name}</h2></div>
+          <div><span className={styles.eyebrow}>{initiativeDialog ? "КАТАЛОГ МЕРОПРИЯТИЙ" : "РАЙОН АСТАНЫ"}</span><h2>{selected.name}</h2></div>
           <button className={styles.closeButton} type="button" onClick={clearSelection} aria-label="Закрыть карточку района">×</button>
         </div>
-        {selected.id ? <>
+        {initiativeDialog && bootstrap ? <InitiativeModal
+          key={initiativeDialog.districtId}
+          open
+          districtId={initiativeDialog.districtId}
+          districtName={initiativeDialog.districtName}
+          initiatives={districtMeasures}
+          decisions={decisions}
+          allMeasures={measures}
+          rules={bootstrap}
+          onSelectInitiative={addDecision}
+          onClose={closeInitiativeDialog}
+        /> : selected.id ? <>
           <div className={styles.scoreBlock}><span>Score района</span><strong>{districtDetail ? number(selectedResult?.scoreAfter ?? districtDetail.baselineScore, 2) : "—"}</strong></div>
           <div className={styles.facts}>
             <div><span>Площадь</span><strong>{selectedStats ? `${number(selectedStats.area_km2)} км²` : "—"}</strong></div>
@@ -497,17 +510,6 @@ export default function DistrictMap() {
         </> : <p className={styles.unavailable}>Этот район показан на административной карте, но не входит в симулятор.</p>}
       </aside>}
       <ScenarioHud selections={selections} requiredCount={bootstrap?.requiredDecisionCount ?? 5} budgetLimit={bootstrap?.budgetLimit ?? 100} calculating={calculating} ready={!!bootstrap} errors={calculationError} onRemove={removeDecision} onCalculate={() => void calculate()} />
-      {bootstrap && initiativeDialog && <InitiativeModal
-        open
-        districtId={initiativeDialog.districtId}
-        districtName={initiativeDialog.districtName}
-        initiatives={districtMeasures}
-        decisions={decisions}
-        allMeasures={measures}
-        rules={bootstrap}
-        onSelectInitiative={addDecision}
-        onClose={closeInitiativeDialog}
-      />}
       {result && showResults && <ResultsOverlay result={result} selections={selections} bootstrap={bootstrap} onViewDistricts={() => setShowResults(false)} onNewScenario={newScenario} />}
     </main>
   );

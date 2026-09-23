@@ -1,6 +1,20 @@
 name: hack-61391193
 
 services:
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        BACKEND_ORIGIN: http://backend-akim:8080
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      BACKEND_ORIGIN: http://backend-akim:8080
+    depends_on:
+      backend-akim:
+        condition: service_healthy
+
   backend-akim:
     build:
       context: .

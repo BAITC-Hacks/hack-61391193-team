@@ -70,10 +70,12 @@ export function ScenarioHud({ selections, requiredCount, budgetLimit, calculatin
       <div className="budget-hud-numbers"><strong>{spent} <small>/ {budgetLimit}</small></strong><span>Осталось <b>{budgetLimit - spent}</b></span></div>
       <div className="budget-track" role="progressbar" aria-label="Потрачено бюджета" aria-valuenow={spent} aria-valuemin={0} aria-valuemax={budgetLimit}><span style={{ width: `${budgetLimit ? Math.min(100, spent / budgetLimit * 100) : 0}%` }} /></div>
     </section>
-    <section className="turns-hud floating-hud" aria-label="Ходы">
-      <div className="turns-progress"><div className="turn-dots" aria-hidden="true">{Array.from({ length: requiredCount }, (_, index) => <span className={index < selections.length ? "turn-dot active" : "turn-dot"} key={index} />)}</div><strong>Ходы {selections.length} / {requiredCount}</strong></div>
-      {selections.length > 0 && <details className="turns-list"><summary>Мероприятия</summary><ol>{selections.map(({ decision, measure, district }) => <li key={decision.measureId}><span>{measure?.name ?? decision.measureId}<small>{district}</small></span><button type="button" onClick={() => onRemove(decision.measureId)} aria-label={`Удалить ${measure?.name ?? decision.measureId}`}>×</button></li>)}</ol></details>}
-      <div className="turns-action"><button className="primary-button" type="button" disabled={!ready || calculating || missing > 0 || spent > budgetLimit} onClick={onCalculate}>{calculating ? "Подсчитываем…" : "Подвести итог"}</button>{missing > 0 && <span>Осталось {missing} {missing === 1 ? "ход" : missing < 5 ? "хода" : "ходов"}</span>}</div>
+    <section className={`${missing > 0 ? "turn-counter" : "turns-hud"} floating-hud`} aria-label="Ходы" aria-live="polite">
+      <div className="turns-progress"><div className="turn-dots" aria-hidden="true">{Array.from({ length: requiredCount }, (_, index) => <span className={index < selections.length ? "turn-dot active" : "turn-dot"} key={index} />)}</div><strong>Ходы {selections.length} / {requiredCount}</strong>{missing > 0 && selections.length > 0 && <button className="turn-undo" type="button" onClick={() => onRemove(selections[selections.length - 1].decision.measureId)} title="Отменить последний ход" aria-label="Отменить последний ход">↶</button>}</div>
+      {missing === 0 && <>
+        <details className="turns-list"><summary>Мероприятия</summary><ol>{selections.map(({ decision, measure, district }) => <li key={decision.measureId}><span>{measure?.name ?? decision.measureId}<small>{district}</small></span><button type="button" onClick={() => onRemove(decision.measureId)} aria-label={`Удалить ${measure?.name ?? decision.measureId}`}>×</button></li>)}</ol></details>
+        <div className="turns-action"><button className="primary-button" type="button" disabled={!ready || calculating || spent > budgetLimit} onClick={onCalculate}>{calculating ? "Подсчитываем…" : "Подвести итог"}</button></div>
+      </>}
       {errors.length > 0 && <div className="error-message turns-error" role="alert">{errors.map((error, index) => <p key={`${index}-${error}`}>{error}</p>)}</div>}
     </section>
   </>;

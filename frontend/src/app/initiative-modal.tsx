@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import MeasurePreview from "../components/measure-3d/MeasurePreview";
 import { isMeasureId } from "../components/measure-3d/catalog";
 import type { Bootstrap, Decision, DistrictMeasure, Measure } from "./api";
@@ -33,33 +33,6 @@ export default function InitiativeModal({ open, districtId, districtName, initia
   const [filter, setFilter] = useState<string>("Все");
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const dialogRef = useRef<HTMLElement>(null);
-  const closeRef = useRef<HTMLButtonElement>(null);
-  const previousFocus = useRef<HTMLElement | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const oldOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    closeRef.current?.focus();
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-      if (event.key !== "Tab" || !dialogRef.current) return;
-      const focusable = [...dialogRef.current.querySelectorAll<HTMLElement>('button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])')];
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (!first || !last) return;
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.body.style.overflow = oldOverflow;
-      document.removeEventListener("keydown", onKeyDown);
-      previousFocus.current?.focus();
-    };
-  }, [open, onClose]);
 
   const measureById = useMemo(() => new Map(allMeasures.map((measure) => [measure.id, measure])), [allMeasures]);
   const spent = decisions.reduce((sum, decision) => sum + (measureById.get(decision.measureId)?.cost ?? 0), 0);
@@ -99,18 +72,13 @@ export default function InitiativeModal({ open, districtId, districtName, initia
   if (!open) return null;
 
   return (
-    <div className={styles.backdrop} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <section ref={dialogRef} className={styles.dialog} role="dialog" aria-modal="true" aria-labelledby="initiative-modal-title" aria-describedby="initiative-modal-subtitle">
+    <section className={styles.catalog} aria-label={`Каталог мероприятий: ${districtName}`}>
         <header className={styles.header}>
           <div className={styles.heading}>
-            <span className={styles.eyebrow}>АКИМ НА 5 ЧАСОВ / КАТАЛОГ</span>
-            <h2 id="initiative-modal-title">Провести мероприятие</h2>
-            <p id="initiative-modal-subtitle">{districtName} <span aria-hidden="true">·</span> Выберите инициативу для сценария</p>
+            <button className={styles.back} type="button" onClick={onClose}>← К району</button>
+            <p>Выберите мероприятие для района {districtName}</p>
           </div>
-          <div className={styles.headerActions}>
-            <div className={styles.budget}><span>Доступно</span><strong>{Math.max(0, rules.budgetLimit - spent)} <small>ед.</small></strong></div>
-            <button ref={closeRef} className={styles.close} type="button" onClick={onClose} aria-label="Закрыть окно">×</button>
-          </div>
+          <div className={styles.budget}>Доступно <strong>{Math.max(0, rules.budgetLimit - spent)} ед.</strong></div>
         </header>
         <div className={styles.filterBar} role="group" aria-label="Направление мероприятия">
           {filters.map((name) => <button key={name} type="button" className={filter === name ? styles.filterActive : styles.filter} aria-pressed={filter === name} onClick={() => setFilter(name)}>{name}</button>)}
@@ -145,7 +113,6 @@ export default function InitiativeModal({ open, districtId, districtName, initia
           {visible.length === 0 && <p className={styles.empty}>В этом направлении пока нет мероприятий.</p>}
         </div>
         {error && <div className={styles.error} role="alert">{error}</div>}
-      </section>
-    </div>
+    </section>
   );
 }

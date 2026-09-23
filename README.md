@@ -20,6 +20,10 @@ BACKEND_ORIGIN=http://127.0.0.1:8081
 
 Для запуска Java-backend из IDE на порту 8080 переменная не требуется. Вход и регистрация доступны при запуске backend с профилем `postgres` и PostgreSQL; подробности для frontend — в [frontend/README.md](frontend/README.md).
 
+### Вся платформа в Docker Compose
+
+Из корня репозитория запустите `docker compose --env-file .env.example up -d --build`. Интерфейс будет доступен на [http://localhost:3000](http://localhost:3000); внешний порт меняется через `FRONTEND_PORT`. В контейнере Next.js обращается к Java-backend по внутреннему адресу `http://backend-akim:8080`, поэтому для этого запуска не нужно задавать `BACKEND_ORIGIN` вручную. Первый запуск также поднимет PostgreSQL, Redis, Qdrant, MinIO и Laya.
+
 ### Backend и PostgreSQL в Docker Desktop
 
 Из корня репозитория, при запущенном Docker Desktop:

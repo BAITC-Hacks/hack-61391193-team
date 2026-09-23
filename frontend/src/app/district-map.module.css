@@ -12,6 +12,7 @@
   backdrop-filter: blur(18px);
   color: #17364a;
 }
+.catalogCard { display: flex; flex-direction: column; width: min(390px, calc(100vw - 32px)); height: min(520px, calc(100dvh - 250px)); min-height: 260px; overflow: hidden; transition: width .22s ease, height .22s ease; }
 
 .cardHeading { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .cardHeading h2 { margin: 5px 0 0; font-size: 25px; line-height: 1.12; letter-spacing: -.045em; }
@@ -37,4 +38,6 @@
   .scoreBlock { margin: 16px 0 12px; padding-bottom: 12px; }
   .scoreBlock strong { font-size: 35px; }
   .facts { margin-bottom: 16px; }
+  .catalogCard { height: min(58dvh, 530px); max-height: min(58dvh, 530px); min-height: 0; overflow: hidden; }
 }
+@media (prefers-reduced-motion: reduce) { .catalogCard { transition: none; } }

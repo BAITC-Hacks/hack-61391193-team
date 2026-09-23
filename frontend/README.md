@@ -2,6 +2,8 @@
 
 Карта районов Астаны с показателями и расчётом сценария через backend.
 
+Для запуска всей платформы из корня репозитория выполните `docker compose --env-file .env.example up -d --build` и откройте http://localhost:3000. Порт интерфейса задаётся через `FRONTEND_PORT` в Compose.
+
 ```bash
 npm install
 npm run dev
